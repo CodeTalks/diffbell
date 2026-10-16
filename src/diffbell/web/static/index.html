@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diffbell</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <link rel="stylesheet" href="/static/app.css">
+  <script type="module" src="/static/js/main.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <span class="brand"><svg class="brand-mark" aria-hidden="true"><use href="/static/icons.svg#diffbell"></use></svg><svg class="brand-word" aria-hidden="true"><use href="/static/icons.svg#diffbell-wordmark"></use></svg><span class="sr-only">Diffbell</span></span>
+      <nav class="tabs" role="tablist" aria-label="Views">
+        <button type="button" role="tab" id="tab-dashboard" data-view="dashboard" aria-controls="view-dashboard" aria-selected="true">Dashboard</button>
+        <button type="button" role="tab" id="tab-projects" data-view="projects" aria-controls="view-projects" aria-selected="false">Projects</button>
+        <button type="button" role="tab" id="tab-settings" data-view="settings" aria-controls="view-settings" aria-selected="false">Settings</button>
+      </nav>
+      <p class="status-line" id="status-line">
+        <svg class="icon" id="status-icon" aria-hidden="true"><use href="/static/icons.svg#pending"></use></svg>
+        <span id="status-text">Connecting…</span>
+        <button type="button" class="link" id="status-attention" hidden></button>
+      </p>
+      <span class="sr-only" id="status-live" aria-live="polite"></span>
+      <span class="muted small" id="refreshed"></span>
+      <button type="button" class="icon-button" id="theme-toggle" aria-label="Theme: System (click for Light)" title="Theme: System (click for Light)"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#theme-system"></use></svg></button>
+      <button type="button" class="icon-button" id="keys-open" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#keyboard"></use></svg></button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" role="alert" hidden></div>
+
+  <main>
+    <section id="view-dashboard" class="view wide" role="tabpanel" aria-labelledby="tab-dashboard">
+      <div class="setup-banner" id="setup-banner" hidden>
+        <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#warning"></use></svg>
+        <span id="setup-text"></span>
+        <button type="button" class="link" id="setup-open">Set up ▸</button>
+      </div>
+      <div class="empty" id="dash-empty" hidden></div>
+      <div class="cards" id="cards"></div>
+      <form class="filters" id="filters">
+        <label>Project <span class="select"><select id="f-project"><option value="" data-key="o:">All projects</option></select></span></label>
+        <label>Status
+          <span class="select"><select id="f-status">
+            <option value="">All</option>
+            <option value="attention">Needs attention</option>
+            <option value="sent">Sent</option>
+            <option value="pending">Sending or retrying</option>
+            <option value="failed">Failed</option>
+            <option value="held">Held</option>
+            <option value="skipped">Not notified</option>
+          </select></span>
+        </label>
+        <label>From <span class="date-field" id="f-from-field"><input type="date" id="f-from"><span class="date-any" aria-hidden="true">Any date</span></span></label>
+        <label>To <span class="date-field" id="f-to-field"><input type="date" id="f-to"><span class="date-any" aria-hidden="true">Any date</span></span></label>
+        <div class="grow search-field">
+          <label>Search
+            <span class="search"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#search"></use></svg><input type="search" id="f-q" maxlength="1024" placeholder="Search files and diffs…  (/)" aria-describedby="f-q-hint"></span>
+          </label>
+          <span class="hint" id="f-q-hint" hidden></span>
+        </div>
+        <button type="button" id="f-clear">Clear<span class="filter-count" id="f-clear-count" aria-hidden="true" hidden></span></button>
+      </form>
+      <div class="split-feed" id="feed-split">
+        <div class="list-pane">
+          <div class="attention" id="attention" role="group" aria-label="Open problems" hidden></div>
+          <p class="muted small" id="feed-status" aria-live="polite"></p>
+          <div class="empty" id="feed-empty" hidden></div>
+          <div class="feed" id="feed" role="group" aria-label="Events"></div>
+          <button type="button" id="more" hidden>Load more</button>
+        </div>
+        <section class="detail" id="detail" aria-label="Event detail"></section>
+        <p class="sr-only" id="detail-live" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section id="view-projects" class="view wide" role="tabpanel" aria-labelledby="tab-projects" hidden>
+      <div class="strip" id="strip"></div>
+      <div class="split">
+        <form class="editor panel" id="editor" novalidate>
+          <h2 id="editor-title">Project</h2>
+          <label class="field">Folder <input type="text" id="e-path" required placeholder="~/projects/app" autocomplete="off" spellcheck="false"></label>
+          <p class="field-error" id="e-path-error" aria-live="polite"></p>
+          <label class="field">Name (optional) <input type="text" id="e-name" autocomplete="off"></label>
+          <fieldset class="field mode">
+            <legend>What to watch</legend>
+            <label class="radio"><input type="radio" name="mode" id="e-mode-defaults" value="defaults" checked> <span id="e-mode-defaults-label">Key files (built-in) + my additions</span></label>
+            <details class="builtins"><summary>Show built-in list</summary><ul class="chips" id="e-builtin-list"></ul></details>
+            <label class="radio"><input type="radio" name="mode" id="e-mode-only" value="only"> Only the files I list</label>
+          </fieldset>
+          <fieldset class="field notify">
+            <legend>Notify me about</legend>
+            <span class="ticks">
+              <label class="tick"><input type="checkbox" id="e-notify-created" checked> New files</label>
+              <label class="tick"><input type="checkbox" id="e-notify-modified" checked> Changes</label>
+              <label class="tick"><input type="checkbox" id="e-notify-deleted" checked> Deletions</label>
+            </span>
+            <p class="hint" id="e-notify-hint" hidden>To silence a project for a while, use snooze on the dashboard.</p>
+          </fieldset>
+          <div class="field">
+            <label for="e-patterns">My files and patterns, one per line</label>
+            <div class="lines"><ol class="gutter" id="e-patterns-gutter" aria-hidden="true"></ol><textarea id="e-patterns" rows="6" spellcheck="false"></textarea></div>
+            <ul class="line-issues" id="e-patterns-issues" aria-live="polite"></ul>
+            <p class="hint"><code>*.lock</code> matches at any depth · <code>src/**/x.py</code> · a pattern containing <code>/</code> is matched from the folder root</p>
+          </div>
+          <details class="field" id="e-ignore-box">
+            <summary>Ignore</summary>
+            <div class="lines"><ol class="gutter" id="e-ignore-gutter" aria-hidden="true"></ol><textarea id="e-ignore" rows="3" spellcheck="false" aria-label="Ignore, one per line"></textarea></div>
+            <ul class="line-issues" id="e-ignore-issues" aria-live="polite"></ul>
+          </details>
+          <div class="actions">
+            <button type="submit" class="primary" id="e-save">Save</button>
+            <button type="button" id="e-remove" class="danger push">Remove</button>
+          </div>
+          <p class="message" id="e-message" aria-live="polite"></p>
+          <div class="conflict" id="e-conflict" hidden>
+            Config changed on disk. Reload to load it (your unsaved changes here are discarded). <button type="button" id="e-reload">Reload</button>
+          </div>
+        </form>
+        <div class="tree-panel panel">
+          <div class="tree-head">
+            <h2 id="tree-title">Will be watched: …</h2>
+            <input type="search" id="tree-filter" placeholder="Filter by name  ( / )" aria-label="Filter the file tree by name">
+          </div>
+          <p class="muted" id="tree-status" aria-live="polite"></p>
+          <ul class="tree" id="tree" aria-labelledby="tree-title"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-settings" class="view wide" role="tabpanel" aria-labelledby="tab-settings" hidden>
+      <div class="s-layout">
+        <nav class="s-index" id="s-index" aria-label="Settings sections">
+          <ul>
+            <li><a href="?view=settings&amp;section=telegram" id="s-index-telegram" data-section="telegram" aria-current="false">Telegram</a></li>
+            <li><a href="?view=settings&amp;section=notifications" id="s-index-notifications" data-section="notifications" aria-current="false">Notifications</a></li>
+            <li><a href="?view=settings&amp;section=schedule" id="s-index-schedule" data-section="schedule" aria-current="false">Schedule</a></li>
+            <li><a href="?view=settings&amp;section=patterns" id="s-index-patterns" data-section="patterns" aria-current="false">Patterns</a></li>
+            <li><a href="?view=settings&amp;section=page" id="s-index-page" data-section="page" aria-current="false">This page</a></li>
+          </ul>
+        </nav>
+        <div class="s-column">
+          <section class="telegram panel" id="tg-card" aria-labelledby="tg-title">
+            <h2 id="tg-title">Telegram</h2>
+            <p class="hint tg-separate">Saved separately, through its own setup steps. <a href="?view=guide" id="tg-guide">Setup guide</a></p>
+            <p class="muted" id="tg-loading">Loading…</p>
+            <div id="tg-state" hidden>
+              <div class="tg-status" id="tg-status">
+                <span class="tg-badge" id="tg-badge" aria-hidden="true"></span>
+                <div class="tg-text">
+                  <p class="tg-headline" id="tg-headline"></p>
+                  <p class="tg-detail" id="tg-detail" hidden></p>
+                  <p class="tg-error-text" id="tg-error" hidden></p>
+                </div>
+              </div>
+              <div class="actions" id="tg-actions">
+                <button type="button" id="tg-send-test" hidden>Send test message</button>
+                <button type="button" id="tg-replace" hidden>Replace bot</button>
+                <a class="tg-link" href="?status=failed" id="tg-show-failed" hidden>Show failed changes</a>
+                <button type="button" id="tg-setup-again" hidden>Set up again</button>
+              </div>
+            </div>
+            <p class="tg-reason" id="tg-reason" hidden></p>
+            <p class="tg-held" id="tg-held" hidden></p>
+            <ol class="wizard" id="tg-wizard" hidden>
+              <li class="wizard-step" id="tg-step-1">
+                <h3>Create a bot</h3>
+                <p>In Telegram, open <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> and send <code>/newbot</code>. <a href="?view=guide&amp;step=create" class="how" id="tg-how-create" data-step="create">How? ▸</a></p>
+              </li>
+              <li class="wizard-step" id="tg-step-2">
+                <h3>Check the token</h3>
+                <form class="token-form" id="tg-token-form" novalidate>
+                  <label class="field">Bot token from @BotFather <input type="password" id="tg-token" autocomplete="off" spellcheck="false"></label>
+                  <button type="submit" id="tg-check">Check</button>
+                </form>
+                <p class="hint">Kept in this Mac's Keychain; the page never shows it again. <a href="?view=guide&amp;step=token" class="how" id="tg-how-token" data-step="token">How? ▸</a></p>
+              </li>
+              <li class="wizard-step" id="tg-step-3">
+                <h3>Send /start</h3>
+                <div id="tg-find" hidden>
+                  <p>Open <strong id="tg-bot-name"></strong> in Telegram and send <code>/start</code> now. A message sent before you clicked Check doesn't count. <a href="?view=guide&amp;step=start" class="how" id="tg-how-start" data-step="start">How? ▸</a></p>
+                </div>
+                <p class="muted" id="tg-waiting" aria-live="polite"></p>
+                <fieldset class="chats" id="tg-chats" hidden>
+                  <legend>Send to</legend>
+                  <div id="tg-chat-list"></div>
+                </fieldset>
+                <div class="manual" id="tg-manual" hidden>
+                  <p>Send /start again, then Check again. <button type="button" id="tg-again">Check again</button></p>
+                  <form class="token-form" id="tg-manual-form" novalidate>
+                    <label class="field">Or enter the chat id <input type="text" id="tg-chat-id" inputmode="numeric" autocomplete="off" spellcheck="false"></label>
+                    <button type="submit" id="tg-use">Use this chat</button>
+                  </form>
+                </div>
+              </li>
+              <li class="wizard-step" id="tg-step-4">
+                <h3>Test and save</h3>
+                <div class="actions">
+                  <button type="button" id="tg-test" disabled>Send test message</button>
+                  <button type="button" class="primary" id="tg-save" disabled>Save</button>
+                  <button type="button" class="link" id="tg-cancel" hidden>Cancel</button>
+                </div>
+              </li>
+            </ol>
+            <p class="message" id="tg-message" aria-live="polite"></p>
+          </section>
+          <div class="s-load-error" id="s-load-error" role="alert" hidden>
+            <p class="s-load-error-text" id="s-load-error-text"></p>
+            <p class="s-help">Fix the file: this view loads it again by itself once it's valid.</p>
+            <button type="button" id="s-load-retry">Try again</button>
+          </div>
+          <form class="s-form" id="settings" novalidate>
+            <section class="s-section" id="s-notifications" aria-labelledby="s-notifications-title">
+              <h2 id="s-notifications-title">Notifications</h2>
+              <div class="s-row">
+                <label class="s-label" for="s-quiet">Wait for quiet</label>
+                <div class="s-field">
+                  <span class="s-input"><input type="text" inputmode="decimal" id="s-quiet" autocomplete="off" spellcheck="false" aria-describedby="s-quiet-unit s-quiet-help s-quiet-error"><span class="s-unit" id="s-quiet-unit">seconds</span></span>
+                  <p class="s-help" id="s-quiet-help">Send once files have stopped changing for this long.</p>
+                  <p class="s-error" id="s-quiet-error"></p>
+                </div>
+              </div>
+              <div class="s-row">
+                <label class="s-label" for="s-maxwait">Never wait longer than</label>
+                <div class="s-field">
+                  <span class="s-input"><input type="text" inputmode="decimal" id="s-maxwait" autocomplete="off" spellcheck="false" aria-describedby="s-maxwait-unit s-maxwait-help s-maxwait-error"><span class="s-unit" id="s-maxwait-unit">seconds</span></span>
+                  <p class="s-help" id="s-maxwait-help">Even if files keep changing, send after this long.</p>
+                  <p class="s-error" id="s-maxwait-error"></p>
+                </div>
+              </div>
+              <div class="s-row">
+                <label class="s-label" for="s-lines">Diff lines per file</label>
+                <div class="s-field">
+                  <span class="s-input"><input type="text" inputmode="numeric" id="s-lines" autocomplete="off" spellcheck="false" aria-describedby="s-lines-unit s-lines-help s-lines-error"><span class="s-unit" id="s-lines-unit">lines</span></span>
+                  <p class="s-help" id="s-lines-help">Shown in Telegram. The full diff is always on this page.</p>
+                  <p class="s-error" id="s-lines-error"></p>
+                </div>
+              </div>
+            </section>
+            <section class="s-section" id="s-schedule" aria-labelledby="s-schedule-title">
+              <h2 id="s-schedule-title">Schedule</h2>
+              <div class="s-switch-row">
+                <h3 class="s-switch-title" id="s-qh-title">Quiet hours</h3>
+                <input type="checkbox" role="switch" class="s-switch" id="s-qh-on" aria-labelledby="s-qh-title" aria-describedby="s-qh-help">
+              </div>
+              <p class="s-help" id="s-qh-help">Hold notifications in a daily window, then send one catch-up per project.</p>
+              <div class="s-reveal" id="s-qh-times" hidden>
+                <div class="s-row">
+                  <label class="s-label" for="s-qh-from">From</label>
+                  <div class="s-field">
+                    <input type="time" id="s-qh-from" aria-describedby="s-qh-from-error">
+                    <p class="s-error" id="s-qh-from-error"></p>
+                  </div>
+                </div>
+                <div class="s-row">
+                  <label class="s-label" for="s-qh-to">To</label>
+                  <div class="s-field">
+                    <input type="time" id="s-qh-to" aria-describedby="s-qh-to-error">
+                    <p class="s-error" id="s-qh-to-error"></p>
+                  </div>
+                </div>
+                <p class="s-preview" id="s-qh-preview" aria-live="polite"></p>
+              </div>
+              <div class="s-switch-row">
+                <h3 class="s-switch-title" id="s-hb-title">Daily heartbeat</h3>
+                <input type="checkbox" role="switch" class="s-switch" id="s-hb-on" aria-labelledby="s-hb-title" aria-describedby="s-hb-help">
+              </div>
+              <p class="s-help" id="s-hb-help">A silent "all OK" message, so a quiet day isn't mistaken for a stopped Diffbell.</p>
+              <div class="s-reveal" id="s-hb-times" hidden>
+                <div class="s-row">
+                  <label class="s-label" for="s-hb-at">Every day at</label>
+                  <div class="s-field">
+                    <input type="time" id="s-hb-at" aria-describedby="s-hb-at-error">
+                    <p class="s-error" id="s-hb-at-error"></p>
+                  </div>
+                </div>
+                <p class="s-preview" id="s-hb-preview" aria-live="polite"></p>
+              </div>
+            </section>
+            <section class="s-section" id="s-patterns" aria-labelledby="s-patterns-title">
+              <h2 id="s-patterns-title">Patterns</h2>
+              <p class="s-intro">Added to the built-in lists for every project. One pattern per line.</p>
+              <p class="hint"><code>*.lock</code> matches at any depth · <code>src/**/x.py</code> · a pattern containing <code>/</code> is matched from the folder root</p>
+              <div class="s-list">
+                <label class="s-label" for="s-defaults">Extra key files</label>
+                <div class="lines"><ol class="gutter" id="s-defaults-gutter" aria-hidden="true"></ol><textarea id="s-defaults" rows="3" spellcheck="false" placeholder="infra/*.tf&#10;deploy/**" aria-describedby="s-defaults-help s-defaults-issues"></textarea></div>
+                <ul class="line-issues" id="s-defaults-issues" aria-live="polite"></ul>
+                <p class="s-help" id="s-defaults-help">Changes to these send a notification.</p>
+                <details class="s-builtins"><summary id="b-defaults-title">Always watched (built in)</summary><ul class="chips" id="b-defaults"></ul></details>
+              </div>
+              <div class="s-list">
+                <label class="s-label" for="s-ignore">Ignore</label>
+                <div class="lines"><ol class="gutter" id="s-ignore-gutter" aria-hidden="true"></ol><textarea id="s-ignore" rows="3" spellcheck="false" placeholder="fixtures/**&#10;*.snap" aria-describedby="s-ignore-help s-ignore-issues"></textarea></div>
+                <ul class="line-issues" id="s-ignore-issues" aria-live="polite"></ul>
+                <p class="s-help" id="s-ignore-help">Matching changes never notify, even if they match a key file.</p>
+                <details class="s-builtins"><summary id="b-excluded-title">Always excluded folders (built in)</summary><ul class="chips" id="b-excluded"></ul></details>
+              </div>
+              <div class="s-list">
+                <label class="s-label" for="s-redact">Extra redactions</label>
+                <div class="lines"><ol class="gutter" id="s-redact-gutter" aria-hidden="true"></ol><textarea id="s-redact" rows="3" spellcheck="false" placeholder="config/prod.*&#10;*.sqlite" aria-describedby="s-redact-help s-redact-issues"></textarea></div>
+                <ul class="line-issues" id="s-redact-issues" aria-live="polite"></ul>
+                <p class="s-help" id="s-redact-help">Reported by name only; their contents are never opened or sent.</p>
+                <details class="s-builtins"><summary id="b-redact-title">Always redacted (built in)</summary><ul class="chips" id="b-redact"></ul></details>
+              </div>
+            </section>
+            <section class="s-section" id="s-page" aria-labelledby="s-page-title">
+              <h2 id="s-page-title">This page</h2>
+              <div class="s-row">
+                <label class="s-label" for="s-editor">Open files in</label>
+                <div class="s-field">
+                  <select id="s-editor">
+                    <option value="cursor">Cursor</option>
+                    <option value="vscode">VS Code</option>
+                    <option value="none">None (hide Open)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="s-row">
+                <span class="s-label" id="s-theme-label">Theme</span>
+                <div class="s-field">
+                  <div class="s-choices" id="s-theme" role="radiogroup" aria-labelledby="s-theme-label" aria-describedby="s-theme-help">
+                    <label class="s-choice"><input type="radio" name="s-theme" id="s-theme-system" value="system"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#theme-system"></use></svg> System</label>
+                    <label class="s-choice"><input type="radio" name="s-theme" id="s-theme-light" value="light"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#theme-light"></use></svg> Light</label>
+                    <label class="s-choice"><input type="radio" name="s-theme" id="s-theme-dark" value="dark"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#theme-dark"></use></svg> Dark</label>
+                  </div>
+                  <p class="s-help" id="s-theme-help">Saved in this browser only; it changes nothing for the daemon.</p>
+                </div>
+              </div>
+              <div class="s-row">
+                <label class="s-label" for="s-port">Web port</label>
+                <div class="s-field">
+                  <input type="text" id="s-port" readonly aria-describedby="s-port-help">
+                  <p class="s-help" id="s-port-help">Change it in config.yaml. Telegram messages link to this dashboard (works on this Mac only).</p>
+                </div>
+              </div>
+              <div class="s-row">
+                <span class="s-label">Sessions</span>
+                <div class="s-field">
+                  <div class="actions">
+                    <button type="button" id="s-logout" class="danger">Log out all sessions</button>
+                    <span class="confirm" id="s-logout-confirm" hidden>
+                      Log out everywhere, including this browser?
+                      <button type="button" class="danger" id="s-logout-yes">Log out</button> ·
+                      <button type="button" class="link" id="s-logout-no">Cancel</button>
+                    </span>
+                  </div>
+                  <p class="message" id="s-page-message" aria-live="polite"></p>
+                </div>
+              </div>
+            </section>
+            <p class="s-error" id="s-other-error" aria-live="polite"></p>
+            <p class="message" id="s-message" aria-live="polite"></p>
+            <div class="s-bar" id="s-bar" aria-live="polite" hidden>
+              <p class="s-bar-text" id="s-bar-text"></p>
+              <div class="s-bar-actions">
+                <button type="button" id="s-reload" hidden>Reload</button>
+                <button type="button" id="s-discard" hidden>Discard</button>
+                <button type="submit" class="primary" id="s-save" hidden>Save changes</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-guide" class="view wide" aria-labelledby="guide-title" hidden>
+      <div class="guide">
+        <p><a href="?view=settings&amp;section=telegram" id="guide-back">← Back to Settings</a></p>
+        <h2 id="guide-title">Set up Telegram</h2>
+        <div id="guide-body"><p class="muted">Loading the guide…</p></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <div class="overlay" id="keys-overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="keys-title">
+      <h2 id="keys-title"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#keyboard"></use></svg> Keyboard shortcuts</h2>
+      <table class="keys">
+        <tbody>
+          <tr><td><kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd></td><td>Save the project or the settings</td></tr>
+          <tr><td><kbd>/</kbd></td><td>Search (dashboard) or filter the file tree (projects)</td></tr>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>j</kbd> <kbd>k</kbd></td><td>Move through the events</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close this, a menu or a message, or clear the focused filter</td></tr>
+          <tr><td><kbd>?</kbd></td><td>Show these shortcuts</td></tr>
+        </tbody>
+      </table>
+      <button type="button" id="keys-close">Close</button>
+    </div>
+  </div>
+</body>
+</html>

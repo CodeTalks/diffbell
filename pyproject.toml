@@ -1,0 +1,106 @@
+[project]
+name = "diffbell"
+version = "0.1.0"
+description = "Diffbell: watch key files across your projects with Watchman and get a Telegram message when they change."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "CodeTalks" }]
+keywords = ["watchman", "telegram", "file-watcher", "notifications", "macos", "launchd"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: System :: Monitoring",
+]
+dependencies = [
+    "pywatchman>=4.0.0,<5",
+    "httpx>=0.27",
+    "pydantic>=2.8",
+    "ruamel.yaml>=0.18",
+    "fastapi>=0.142.4",
+    "uvicorn>=0.54.0",
+    "httpcore>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/CodeTalks/diffbell"
+Repository = "https://github.com/CodeTalks/diffbell"
+Issues = "https://github.com/CodeTalks/diffbell/issues"
+
+[project.scripts]
+diffbell = "diffbell.cli:entrypoint"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/diffbell"]
+
+# The sdist is an allowlist of what git tracks: the local design notes
+# (docs/superpowers/, gitignored) and other local folders never ship.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/.github",
+    "/src",
+    "/tests",
+    "/scripts",
+    "/docs/adr",
+    "/docs/brand",
+    "/docs/architecture.md",
+    "/docs/telegram-setup.md",
+    "/README.md",
+    "/LICENSE",
+    "/CLAUDE.md",
+    "/Makefile",
+    "/pyproject.toml",
+    "/uv.lock",
+    "/.python-version",
+    "/.watchmanconfig",
+    "/.gitignore",
+]
+exclude = ["/docs/superpowers", "__pycache__"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "mypy>=1.11",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["integration: needs a real watchman binary (skipped when absent)"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["pywatchman", "pywatchman.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+# ruff 0.16 also formats Python blocks inside Markdown; docs/plans hold illustrative snippets.
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+# RUF00x: messages intentionally use typographic characters (… · ✏️).
+# E501: `ruff format` owns line length; long string literals in tests are fine.
+ignore = ["RUF001", "RUF002", "RUF003", "E501"]

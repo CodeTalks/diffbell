@@ -1,0 +1,23 @@
+# worktrees (feature-branch workflow)
+.worktrees/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# local
+.env
+.env.*
+.DS_Store
+
+# local design notes (specs and plans): kept out of the public repository
+docs/superpowers/

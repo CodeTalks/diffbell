@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# The worktree's diffbell with every scratch override set (live check A).
+# Refuses the commands that act on the live launchd agent.
+#   scripts/live/dbell run -v | status | doctor | web | test | setup
+set -euo pipefail
+# shellcheck source=scripts/live/common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
+case "${1:-}" in
+install | uninstall | upgrade)
+  die "\`$1\` acts on the live launchd agent ($DEFAULT_SERVICE): never run it from a worktree"
+  ;;
+esac
+require_venv
+
+[[ -f "$WM_INFO" && -f "$CONFIG" ]] || die "no scratch setup: run scripts/live/scratch-check.sh prepare first"
+# shellcheck source=/dev/null
+source "$WM_INFO" # WM_DIR, WM_SOCK, WM_PID (written by prepare, shlex-quoted)
+[[ -S "$WM_SOCK" ]] || die "the private Watchman's socket is gone: run scratch-cleanup.sh, then prepare again"
+
+export DIFFBELL_CONFIG="$CONFIG"
+export DIFFBELL_STATE_DIR="$STATE"
+export DIFFBELL_LOG_DIR="$LOGS"
+export DIFFBELL_KEYCHAIN_SERVICE="$SCRATCH_SERVICE"
+# pywatchman (and so the daemon's WatchmanClient) honours WATCHMAN_SOCK; with it set,
+# it never asks the watchman CLI for the default socket.
+export WATCHMAN_SOCK="$WM_SOCK"
+# The daemon runs with the caller's umask, not the scripts' 077 (common.sh).
+umask "$ORIG_UMASK"
+exec "$DBELL_BIN" "$@"

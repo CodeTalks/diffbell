@@ -1,0 +1,63 @@
+# Release: pushing a tag vX.Y.Z runs the full gate on macOS, builds the sdist and
+# the wheel, checks the tag names the version and the sdist holds exactly the
+# tracked files, then publishes a GitHub release with both files and SHA256SUMS
+# (the Homebrew formula downloads the sdist from it). Nothing goes to PyPI.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # create the release; nothing else
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+          enable-cache: false
+
+      - name: The tag names the version
+        run: uv run --no-project python -I scripts/release_check.py version "$GITHUB_REF_NAME"
+
+      - name: Install Watchman (the integration tests run on a private instance)
+        run: brew install watchman
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Quality gate
+        env:
+          DIFFBELL_REQUIRE_NODE: "1"
+        run: make check
+
+      - name: Build the sdist and the wheel
+        run: uv build --out-dir dist
+
+      - name: The sdist holds exactly the tracked files
+        run: uv run --no-project python -I scripts/release_check.py sdist dist
+
+      - name: Checksums
+        working-directory: dist
+        run: shasum -a 256 -- *.tar.gz *.whl > SHA256SUMS
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.whl dist/SHA256SUMS
+          --verify-tag --generate-notes --title "Diffbell ${GITHUB_REF_NAME#v}"
