@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from diffbell import launchd, liveness, paths
+from diffbell import __version__, launchd, liveness, paths
 from diffbell.config import ConfigError, load_and_resolve, load_config
 from diffbell.diffing import split_lines
 from diffbell.install_source import read_source
@@ -111,6 +111,11 @@ def _q(path: Path) -> str:
 
 
 def check_install(env: Env) -> Check:
+    brew = launchd.running_from_homebrew()
+    if brew is not None:
+        # ADR 0021: Homebrew records what it installed; install-source.json is only
+        # the checkout `upgrade` builds from, which never applies here.
+        return Check("Install", "ok", f"Homebrew ({brew}), diffbell {__version__}")
     fix = "diffbell upgrade --from <repo>"
     if env.pending_source is not None:
         # Run by `upgrade` before it records the new source: judge that one. A

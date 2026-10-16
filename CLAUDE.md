@@ -147,6 +147,9 @@ CodeTalks; the launchd label and bundle prefix are `io.688.*`.
   state and may be run by an agent; steps that need
   the user (BotFather, their Telegram app, a browser login the agent can't drive) and
   the real switchover (ADR 0020) stay the user's.
+- A Homebrew install (ADR 0021) is recognised only by `launchd.running_from_homebrew`;
+  `upgrade` refuses it first (exit 2), and the plist names the `opt` path, never a
+  versioned Cellar path (`launchd.stable_executable`).
 - `rename_install.py` is the only code naming the old dev-watchman install. It acts   <!-- old-name -->
   on the real one only with `switchover=True` (only `install` passes it, never under a
   scratch override; tests set `REAL_SWITCHOVER_ALLOWED = False`). Its explicit Keychain

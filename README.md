@@ -18,11 +18,20 @@ any of them change on disk, whether the change came from you, a script or an AI 
 
 ## Install
 
+With Homebrew (Watchman comes with it):
+
 ```bash
-brew install watchman
-uv tool install .            # from a clone of this repo
+brew install codetalks/tap/diffbell
 diffbell install         # starts the agent and opens the web UI
 # then set up Telegram in the page that opens, or run `diffbell setup`
+```
+
+Or from a clone of this repository:
+
+```bash
+brew install watchman
+uv tool install .
+diffbell install
 ```
 
 Watchman comes first: without it `diffbell install` stops with exit code 2 and the
@@ -290,6 +299,16 @@ Locations: config `~/.config/diffbell/config.yaml`, state (SQLite, lock,
 `DIFFBELL_CONFIG`, `DIFFBELL_STATE_DIR` and `DIFFBELL_LOG_DIR`.
 
 ### Upgrading
+
+A Homebrew install upgrades with Homebrew, then restarts the agent:
+
+```bash
+brew upgrade diffbell
+diffbell install         # the running daemon keeps the old version until then
+```
+
+`diffbell upgrade` is for an install from a checkout; on a Homebrew install it stops
+with exit 2 and says the two commands above.
 
 ```bash
 diffbell upgrade --from ~/projects/diffbell   # the first time
