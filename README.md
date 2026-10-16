@@ -3,6 +3,8 @@
   <img alt="Diffbell" src="docs/brand/diffbell-lockup.svg" height="48">
 </picture>
 
+[![CI](https://github.com/CodeTalks/diffbell/actions/workflows/ci.yml/badge.svg)](https://github.com/CodeTalks/diffbell/actions/workflows/ci.yml)
+
 # Diffbell
 
 Watches **key files** (manifests, lockfiles, env files, CI workflows, build files,
@@ -509,9 +511,10 @@ The web page's JS tests need node ≥ 22.7 and are skipped without it; set
    `uv lock`, then merge as usual.
 2. Tag the merge on `main` and push the tag:
    `git tag -a v0.2.0 -m "Diffbell 0.2.0" && git push origin v0.2.0`.
-3. `.github/workflows/release.yml` runs the gate on macOS, builds the sdist and the
-   wheel, checks the tag and the sdist (`scripts/release_check.py`), and publishes a
-   GitHub release with both files and `SHA256SUMS`.
+3. `.github/workflows/release.yml` checks the tag, runs the gate (`ci.yml`, the same
+   job every push to `main` and every pull request runs), builds the sdist and the
+   wheel, checks the sdist (`scripts/release_check.py`), and publishes a GitHub
+   release with both files and `SHA256SUMS`.
 
 ## License
 

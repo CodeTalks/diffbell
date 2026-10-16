@@ -1,6 +1,6 @@
-# Release: pushing a tag vX.Y.Z runs the full gate on macOS, builds the sdist and
-# the wheel, checks the tag names the version and the sdist holds exactly the
-# tracked files, then publishes a GitHub release with both files and SHA256SUMS
+# Release: pushing a tag vX.Y.Z checks the tag names the version, runs the gate
+# (ci.yml, on macOS), builds the sdist and the wheel, checks the sdist holds exactly
+# the tracked files, then publishes a GitHub release with both files and SHA256SUMS
 # (the Homebrew formula downloads the sdist from it). Nothing goes to PyPI.
 name: Release
 
@@ -16,11 +16,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    runs-on: macos-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write # create the release; nothing else
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,16 +32,25 @@ jobs:
       - name: The tag names the version
         run: uv run --no-project python -I scripts/release_check.py version "$GITHUB_REF_NAME"
 
-      - name: Install Watchman (the integration tests run on a private instance)
-        run: brew install watchman
+  gate:
+    needs: tag
+    uses: ./.github/workflows/ci.yml
 
-      - name: Install dependencies
-        run: uv sync --locked
+  release:
+    needs: gate
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the release; nothing else
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Quality gate
-        env:
-          DIFFBELL_REQUIRE_NODE: "1"
-        run: make check
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+          enable-cache: false
 
       - name: Build the sdist and the wheel
         run: uv build --out-dir dist
