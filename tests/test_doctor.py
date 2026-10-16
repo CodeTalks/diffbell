@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from diffbell import cli, doctor, launchd
+from diffbell import __version__, cli, doctor, launchd
 from diffbell.doctor import Check, Env, run_checks
 from diffbell.install_source import Source, write_source
 from diffbell.liveness import write_status_file
@@ -265,6 +265,18 @@ def test_install_source(tmp_dir: Path) -> None:
     )
     (s.env.state_dir / "install-source.json").unlink()
     assert doctor.check_install(s.env).message == "install source unknown (no install-source.json)"
+
+
+def test_a_homebrew_install_is_its_own_source(
+    tmp_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR 0021: Homebrew records the version; install-source.json doesn't apply."""
+    s = scene(tmp_dir)
+    (s.env.state_dir / "install-source.json").unlink()
+    monkeypatch.setattr(launchd, "running_from_homebrew", lambda: Path("/opt/homebrew"))
+    assert doctor.check_install(s.env) == Check(
+        "Install", "ok", f"Homebrew (/opt/homebrew), diffbell {__version__}"
+    )
 
 
 # -- the pending source (Plan 7 spec §4) ------------------------------------------------

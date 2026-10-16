@@ -13,7 +13,7 @@ from typing import Any, ClassVar
 
 import pytest
 
-from diffbell import BRAND, cli, launchd, liveness
+from diffbell import BRAND, __version__, cli, launchd, liveness
 from diffbell.cli import configure_logging, main, status_report
 from diffbell.config import (
     DEFAULT_CONFIG_TEXT,
@@ -88,7 +88,7 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--version"])
     assert exc.value.code == 0
-    assert "Diffbell 0.1.0" in capsys.readouterr().out
+    assert f"{BRAND} {__version__}" in capsys.readouterr().out
 
 
 def test_logging_never_shows_httpx_request_urls(tmp_dir: Path) -> None:

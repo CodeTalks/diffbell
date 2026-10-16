@@ -36,6 +36,11 @@ INSTALL_TIMEOUT = 60.0
 DOCTOR_TIMEOUT = 60.0
 WAIT_SECONDS = liveness.READY_WAIT_SECONDS
 BACKUP_PREFIX = "state-upgrade-"
+# ADR 0021: Homebrew owns a Homebrew install; upgrade never builds a checkout over it.
+HOMEBREW_INSTALL = (
+    "this Diffbell was installed with Homebrew: run `brew upgrade diffbell`, "
+    "then `diffbell install` to restart the agent."
+)
 # Only files named exactly like the backups this command makes are ever pruned.
 BACKUP_NAME = re.compile(r"state-upgrade-\d{8}T\d{6}Z\.db")
 KEEP_BACKUPS = 3
@@ -455,6 +460,8 @@ def run_upgrade(options: Options, runners: Runners | None = None) -> int:
     runners = runners or Runners()
     out = runners.out
     try:
+        if launchd.running_from_homebrew() is not None:
+            raise UpgradeError(HOMEBREW_INSTALL)
         refuse_an_old_install()
         if launchd.find_watchman() is None:
             raise UpgradeError(launchd.watchman_missing_message("run the upgrade again"))

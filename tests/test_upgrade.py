@@ -192,6 +192,20 @@ def test_no_watchman_for_the_agent_refuses_the_upgrade(
     assert world.backups() == [] and read_source(world.state) is None
 
 
+def test_a_homebrew_install_refuses_the_upgrade(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR 0021: Homebrew owns that install; upgrade never builds a checkout over it."""
+    monkeypatch.setattr(launchd, "running_from_homebrew", lambda: Path("/opt/homebrew"))
+    assert world.upgrade() == 2
+    assert world.printed == [
+        "Upgrade failed: this Diffbell was installed with Homebrew: run "
+        "`brew upgrade diffbell`, then `diffbell install` to restart the agent."
+    ]
+    assert world.calls == []  # no git, no uv
+    assert world.backups() == [] and read_source(world.state) is None
+
+
 def test_an_unchecked_keychain_alone_does_not_block_the_upgrade(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:

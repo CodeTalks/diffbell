@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import plistlib
+import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -17,7 +19,11 @@ from diffbell.launchd import (
     bootout,
     bootstrap,
     build_plist,
+    find_executable,
+    homebrew_prefix,
     install,
+    running_from_homebrew,
+    stable_executable,
     uninstall,
     watchman_on_agent_path,
 )
@@ -222,3 +228,79 @@ def test_watchman_is_looked_up_on_the_agents_path() -> None:
     assert watchman_on_agent_path(which=which) == Path("/opt/homebrew/bin/watchman")
     assert seen == [("watchman", LAUNCHD_PATH)]
     assert watchman_on_agent_path(which=lambda cmd, path=None: None) is None
+
+
+# -- Homebrew installs (ADR 0021) ----------------------------------------------------
+
+
+def brew_layout(root: Path, version: str = "0.1.1") -> Path:
+    """A Homebrew prefix with diffbell `version` in its Cellar, `opt/diffbell` pointing
+    at it and `bin/diffbell` linked the way Homebrew links a virtualenv formula."""
+    prefix = root.resolve() / "homebrew"
+    script = prefix / "Cellar" / "diffbell" / version / "libexec" / "bin" / "diffbell"
+    script.parent.mkdir(parents=True)
+    script.write_text("#!/bin/sh\n", encoding="utf-8")
+    (prefix / "opt").mkdir()
+    (prefix / "opt" / "diffbell").symlink_to(prefix / "Cellar" / "diffbell" / version)
+    (prefix / "bin").mkdir()
+    (prefix / "bin" / "diffbell").symlink_to(script)
+    return prefix
+
+
+def test_a_cellar_executable_becomes_the_stable_opt_path(tmp_dir: Path) -> None:
+    prefix = brew_layout(tmp_dir)
+    resolved = prefix / "Cellar" / "diffbell" / "0.1.1" / "libexec" / "bin" / "diffbell"
+    assert (
+        stable_executable(resolved) == prefix / "opt" / "diffbell" / "libexec" / "bin" / "diffbell"
+    )
+    assert homebrew_prefix(resolved) == prefix
+
+
+def test_other_executables_are_kept(tmp_dir: Path) -> None:
+    uv_tool = (
+        tmp_dir.resolve() / ".local" / "share" / "uv" / "tools" / "diffbell" / "bin" / "diffbell"
+    )
+    assert stable_executable(uv_tool) == uv_tool
+    assert homebrew_prefix(uv_tool) is None
+    # Another formula's Cellar is not ours.
+    other = tmp_dir.resolve() / "homebrew" / "Cellar" / "other" / "1.0" / "bin" / "diffbell"
+    assert stable_executable(other) == other and homebrew_prefix(other) is None
+
+
+def test_a_cellar_path_without_its_opt_link_is_kept(tmp_dir: Path) -> None:
+    prefix = brew_layout(tmp_dir)
+    (prefix / "opt" / "diffbell").unlink()
+    resolved = prefix / "Cellar" / "diffbell" / "0.1.1" / "libexec" / "bin" / "diffbell"
+    assert stable_executable(resolved) == resolved
+
+
+def test_find_executable_gives_launchd_the_opt_path(
+    tmp_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`brew upgrade` deletes the old Cellar folder: the plist must not name it."""
+    prefix = brew_layout(tmp_dir)
+    monkeypatch.setattr(shutil, "which", lambda name: str(prefix / "bin" / name))
+    assert find_executable() == prefix / "opt" / "diffbell" / "libexec" / "bin" / "diffbell"
+
+
+def test_find_executable_resolves_a_uv_tool_link(
+    tmp_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = tmp_dir.resolve() / "tools" / "diffbell" / "bin" / "diffbell"
+    real.parent.mkdir(parents=True)
+    real.write_text("#!/bin/sh\n", encoding="utf-8")
+    link = tmp_dir.resolve() / "bin" / "diffbell"
+    link.parent.mkdir()
+    link.symlink_to(real)
+    monkeypatch.setattr(shutil, "which", lambda name: str(link))
+    assert find_executable() == real
+
+
+def test_running_from_homebrew_reads_the_interpreter_prefix(
+    tmp_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prefix = brew_layout(tmp_dir)
+    monkeypatch.setattr(sys, "prefix", str(prefix / "opt" / "diffbell" / "libexec"))
+    assert running_from_homebrew() == prefix
+    monkeypatch.setattr(sys, "prefix", str(tmp_dir.resolve() / "venv"))
+    assert running_from_homebrew() is None

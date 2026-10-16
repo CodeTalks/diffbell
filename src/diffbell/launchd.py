@@ -8,6 +8,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -48,11 +49,38 @@ def plist_path() -> Path:
     return Path(f"~/Library/LaunchAgents/{LABEL}.plist").expanduser()
 
 
+# Homebrew keeps each version in <prefix>/Cellar/diffbell/<version>/ and deletes it on
+# upgrade; <prefix>/opt/diffbell always links the current one (ADR 0021).
+HOMEBREW_CELLAR = re.compile(r"^(?P<prefix>/.+)/Cellar/diffbell/[^/]+(?:/(?P<rest>.*))?$")
+
+
+def homebrew_prefix(path: Path) -> Path | None:
+    """The Homebrew prefix when the resolved `path` lies in its diffbell Cellar."""
+    match = HOMEBREW_CELLAR.match(str(path))
+    return Path(match["prefix"]) if match else None
+
+
+def stable_executable(resolved: Path) -> Path:
+    """A resolved Cellar path as its `opt` path, which survives `brew upgrade`; any
+    other path (and a Cellar path whose `opt` link is missing) unchanged."""
+    match = HOMEBREW_CELLAR.match(str(resolved))
+    if match is None or not match["rest"]:
+        return resolved
+    stable = Path(match["prefix"]) / "opt" / "diffbell" / match["rest"]
+    return stable if stable.exists() else resolved
+
+
+def running_from_homebrew() -> Path | None:
+    """The Homebrew prefix when this process runs from a Homebrew install of diffbell
+    (its virtualenv lives in the Cellar), else None. `upgrade` and `doctor` ask."""
+    return homebrew_prefix(Path(sys.prefix).resolve())
+
+
 def find_executable() -> Path:
     found = shutil.which("diffbell")
     if found is None:
         raise LaunchdError("diffbell is not on PATH; run `uv tool install .` first")
-    return Path(found).resolve()
+    return stable_executable(Path(found).resolve())
 
 
 def build_plist(executable: Path, log_dir: Path) -> dict[str, Any]:
