@@ -58,6 +58,7 @@ include = [
     "/docs/telegram-setup.md",
     "/README.md",
     "/LICENSE",
+    "/SECURITY.md",
     "/CLAUDE.md",
     "/Makefile",
     "/pyproject.toml",

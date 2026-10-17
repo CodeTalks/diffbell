@@ -51,7 +51,10 @@ Updating the tap for a release is a pull request on the tap, opened by
   tap, and a tampered formula runs code on every user's machine at `brew install`,
   so it would take a GitHub App installation token scoped to the tap (not a
   personal token), only in the tag-triggered release workflow, never in a job that
-  runs on `pull_request`.
+  runs on `pull_request`. Such a job depends on `release` (`needs: release`), gets
+  `permissions: contents: read`, passes the token as `GH_TOKEN`, and skips with a
+  notice when the secret is absent through a step-level `if` on an `env:` value
+  (a job-level `if` on `secrets.*` is the fragile form).
 - The tap's CI (`brew test-bot`) builds, installs and tests the PR; merging it
   publishes the version.
 

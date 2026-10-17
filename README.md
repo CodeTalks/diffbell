@@ -519,6 +519,10 @@ The web page's JS tests need node ≥ 22.7 and are skipped without it; set
    shows the formula diff; without `--dry-run` it opens the tap PR. Merge it once the
    tap's `brew test-bot` check passes.
 
+## Security
+
+Report a vulnerability privately: see [SECURITY.md](SECURITY.md).
+
 ## License
 
 MIT, see [LICENSE](LICENSE). The wordmark's outlines come from Figtree, under the
