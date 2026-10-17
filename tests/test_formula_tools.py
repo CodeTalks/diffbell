@@ -243,3 +243,16 @@ def test_a_bad_version_is_refused() -> None:
 def test_an_older_version_is_refused() -> None:
     with pytest.raises(bumper.BumpError, match=re.escape("0.1.0 is older than the tap's formula")):
         bumper.bump(FakeTap(), "v0.1.0", dry_run=True, out=lambda _: None)
+
+
+def test_an_open_pr_is_updated_when_the_formula_changed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A re-cut release (new sums): the branch gets the new formula, the PR stays one."""
+    tap = FakeTap()
+    bumper.bump(tap, "0.1.2", dry_run=False, out=lambda _: None)
+    writes = len(tap.writes)
+    monkeypatch.setitem(globals(), "SUMS", SUMS.replace(SHA_NEW, "e" * 64))
+    printed: list[str] = []
+    assert bumper.bump(tap, "0.1.2", dry_run=False, out=printed.append) == 0
+    assert printed == ["https://github.com/CodeTalks/homebrew-tap/pull/1"]
+    assert f'sha256 "{"e" * 64}"' in tap.files["diffbell-0.1.2"]
+    assert len(tap.prs) == 1 and len(tap.writes) == writes + 1  # one PUT, no new branch

@@ -1,0 +1,23 @@
+# Weekly update PRs, which CI tests. The actions are pinned to commit SHAs, so these
+# PRs are how they stay current. A runtime dependency bump reaches the Homebrew
+# formula at the next release (scripts/bump_formula.py renders it from uv.lock).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      runtime:
+        dependency-type: production
+      dev:
+        dependency-type: development
