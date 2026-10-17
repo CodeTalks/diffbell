@@ -515,6 +515,9 @@ The web page's JS tests need node ≥ 22.7 and are skipped without it; set
    job every push to `main` and every pull request runs), builds the sdist and the
    wheel, checks the sdist (`scripts/release_check.py`), and publishes a GitHub
    release with both files and `SHA256SUMS`.
+4. Update the Homebrew tap: `uv run python scripts/bump_formula.py 0.2.0 --dry-run`
+   shows the formula diff; without `--dry-run` it opens the tap PR. Merge it once the
+   tap's `brew test-bot` check passes.
 
 ## License
 

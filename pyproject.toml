@@ -70,6 +70,7 @@ exclude = ["/docs/superpowers", "__pycache__"]
 
 [dependency-groups]
 dev = [
+    "packaging>=24",  # scripts/formula_resources.py evaluates uv.lock markers
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "mypy>=1.11",
