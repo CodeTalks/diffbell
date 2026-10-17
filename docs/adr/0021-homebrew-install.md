@@ -36,6 +36,25 @@ fight Homebrew over the same command, and `doctor`'s Install check knows only
   `brew upgrade` (the running daemon keeps the old code until it restarts). Its test
   runs only `diffbell --version` and `diffbell help`.
 
+Updating the tap for a release is a pull request on the tap, opened by
+`scripts/bump_formula.py <version>` (`--dry-run` first prints the diff):
+- The published release is the source of truth: the formula's `url` is the
+  release asset, its `sha256` comes from the release's `SHA256SUMS`, and the
+  resources are rendered from `uv.lock` at the release's tag
+  (`scripts/formula_resources.py`: the runtime closure, markers evaluated for macOS
+  on the formula's Python, minus what Homebrew formulae provide).
+- It is idempotent per version: one branch `diffbell-<version>`, one open PR (an
+  existing one is updated), and nothing at all when the formula already matches.
+  It never downgrades.
+- It acts as `GH_TOKEN` or the `gh` login, so a CI job can later wrap it unchanged.
+  It is run by hand for now: an automated job needs a credential that can write the
+  tap, and a tampered formula runs code on every user's machine at `brew install`,
+  so it would take a GitHub App installation token scoped to the tap (not a
+  personal token), only in the tag-triggered release workflow, never in a job that
+  runs on `pull_request`.
+- The tap's CI (`brew test-bot`) builds, installs and tests the PR; merging it
+  publishes the version.
+
 ## Consequences
 - The agent survives `brew upgrade`: launchd runs the `opt` path, whose script's
   interpreter is the new version's once Homebrew relinks.
