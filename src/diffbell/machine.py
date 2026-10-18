@@ -54,7 +54,9 @@ def removed(ch: str) -> bool:
 def clean(text: str) -> str:
     """``text`` stripped, without control, format and bidi characters, inner whitespace
     collapsed to one space, cut to MAX_NAME characters (no ellipsis)."""
-    kept = "".join(ch for ch in text if not removed(ch))
+    # Whitespace (a tab, a newline) separates words; other control, format and bidi
+    # characters are dropped.
+    kept = "".join(" " if ch.isspace() else ch for ch in text if ch.isspace() or not removed(ch))
     return " ".join(kept.split())[:MAX_NAME].strip()
 
 

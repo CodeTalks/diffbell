@@ -75,7 +75,7 @@ def test_an_unexpected_runner_error_is_still_never_raised(monkeypatch: pytest.Mo
         ("  Work MBP  ", "Work MBP"),
         ("Work​ MBP", "Work MBP"),  # format (zero-width space)
         ("Work‮MBP", "WorkMBP"),  # bidi override
-        ("Work\x07\nMBP", "WorkMBP"),  # control characters, the newline included
+        ("Work\x07\nMBP", "Work MBP"),  # the bell dropped; the newline separates words
         ("Work \t  MBP", "Work MBP"),  # tabs are control characters: dropped
         ("Work    MBP", "Work MBP"),
         ("Work  MBP", "Work MBP"),  # other whitespace collapses too
@@ -120,3 +120,10 @@ def test_signature() -> None:
 def test_the_belt_names_every_test_mac() -> None:
     assert machine.computer_name() == "Test Mac"
     assert machine.resolve(None) == "Test Mac"
+
+
+def test_control_whitespace_inside_a_name_becomes_a_space() -> None:
+    """A tab or newline between words separates them; other control and bidi
+    characters are dropped."""
+    assert machine.clean("Work\tMBP\nTwo") == "Work MBP Two"
+    assert machine.clean("Wo\u202erk") == "Work"

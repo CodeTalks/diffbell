@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 
-from diffbell.config import DEFAULT_CONFIG_TEXT, Editor, load_config
+from diffbell.config import DEFAULT_CONFIG_TEXT, Editor, load_config, write_default_config
 from diffbell.web import config_edit
 from diffbell.web.config_edit import (
     ConfigConflict,
@@ -461,6 +461,27 @@ def test_a_comment_below_the_last_key_stays_and_the_blank_line_moves(tmp_dir: Pa
         'web:\n  port: 8765\n  # note\n  editor: "vscode"\n\nprojects: []\n'
     )
     assert load_config(path).web.editor == "vscode"
+
+
+def machine_name(value: str | config_edit.Keep | None) -> SettingsInput:
+    notify = config_edit.NotifyInput(None, machine=value)
+    return SettingsInput(10.0, 60.0, 20, [], [], [], notify)
+
+
+def test_naming_the_mac_and_clearing_it_restores_the_layout(tmp_dir: Path) -> None:
+    """ADR 0023: the name takes the block's blank lines as its new last key, and gives
+    them back when it is removed, so name → Computer Name leaves the file as it was."""
+    path = tmp_dir / "config.yaml"
+    write_default_config(path)
+    config_edit.update_settings(
+        path, config_edit.config_version(path), machine_name(config_edit.KEEP)
+    )
+    baseline = path.read_text()
+    config_edit.update_settings(path, config_edit.config_version(path), machine_name("Work MBP"))
+    assert 'machine: "Work MBP"' in path.read_text()
+    config_edit.update_settings(path, config_edit.config_version(path), machine_name(None))
+    assert path.read_text() == baseline
+    assert load_config(path).notify.machine is None
 
 
 def test_an_existing_editor_is_changed_in_place(tmp_dir: Path) -> None:
