@@ -319,7 +319,7 @@ brew update               # fetches the tap: brew upgrade alone may not see a ne
 brew upgrade diffbell
 ```
 
-Within about a minute the agent notices the new version, stops and is started again
+Within about 20 seconds the agent notices the new version, stops and is started again
 by launchd on it; Telegram tells you (silently) "⬆️ Diffbell updated: 0.1.2 → 0.1.3".
 The page's footer shows the version that is running.
 
