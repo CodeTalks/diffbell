@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from diffbell import __version__, selfupdate
+from diffbell import __version__, machine, selfupdate
 from diffbell import config as config_mod
 from diffbell import daemon as daemon_mod
 from diffbell import secrets as secrets_mod
@@ -162,10 +162,20 @@ async def test_a_start_names_the_mac_in_its_notices(tmp_dir: Path) -> None:
     await asyncio.wait_for(task, timeout=10)
 
 
-async def test_every_reload_resolves_the_mac_again(tmp_dir: Path) -> None:
+async def test_every_reload_resolves_the_mac_again(
+    tmp_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     sender = FakeSender()
     d, _ = make_daemon(tmp_dir, sender)
     stubbed(d, StubWatcher())
+    d._computer_name = "Test Mac"  # what run() reads once, in a thread, at start
+    calls: list[int] = []
+
+    def counting(*args: Any, **kwargs: Any) -> str:
+        calls.append(1)
+        return "Other"
+
+    monkeypatch.setattr(machine, "computer_name", counting)
     base = d._config_path.read_text()
     seen = []
     for notify in ('notify:\n  machine: "Work  MBP"\n', 'notify:\n  machine: ""\n', ""):
@@ -182,6 +192,7 @@ async def test_every_reload_resolves_the_mac_again(tmp_dir: Path) -> None:
         ("Test Mac", "Test Mac", "⚠️ Diffbell (Test Mac): it broke"),
     ]
     assert d._heartbeat.text(d._clock()).startswith("✅ Diffbell (Test Mac) · watching")
+    assert calls == []  # a reload never runs scutil (it would block the loop)
 
 
 async def test_one_failing_maintenance_step_does_not_skip_the_others(

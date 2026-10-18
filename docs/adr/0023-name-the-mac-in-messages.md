@@ -24,7 +24,9 @@ ids are numbered per Mac. The setup guide never explained a second Mac.
   not cleaned, so the user sees what is wrong. The message is in
   `settings_check.MESSAGES["machine_name"]` (ADR 0019): "Use at most 40 characters,
   without control characters."
-- The daemon resolves the name at start and at every reload (`_apply_config`). It
+- The daemon reads the Computer Name once at start, in a thread (`scutil` can take
+  up to 2 s and must never block the loop), and resolves the setting at start and at
+  every reload (`_apply_config`) against that cached name. It
   passes the name to `NotifierSettings.machine` and a `signature` callable to
   `Health` and the `Heartbeat`; each reads the callable at send time. Every new
   parameter defaults to no name, so the texts read as before.
@@ -56,7 +58,7 @@ ids are numbered per Mac. The setup guide never explained a second Mac.
   says which Mac's page it opens.
 - After an upgrade, messages carry the Computer Name at once. `notify.machine: ""`
   (or the switch) restores the old texts.
-- A rename in System Settings is picked up at the next start or config reload, not
-  live.
+- A rename in System Settings is picked up at the next daemon start (a config
+  reload reuses the name read at start); a `notify.machine` change applies at once.
 - Tests never run `scutil`: a conftest belt makes `machine.computer_name` return
   "Test Mac". Tests that pin the nameless texts use the `nameless_mac` fixture.

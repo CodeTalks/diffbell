@@ -104,6 +104,9 @@ class Daemon:
         # This Mac's name in messages (ADR 0023): resolved from notify.machine at start
         # and at every reload (_apply_config); None: no name.
         self._machine: str | None = None
+        # The Computer Name, read once at start in a thread (run): `scutil` takes up to
+        # 2 s and must never block the loop; a renamed Mac shows at the next start.
+        self._computer_name: str | None = None
         self._projects: dict[str, ResolvedProject] = {}
         self._missing: dict[str, MissingProject] = {}
         # Serializes reloads: the config self-watch and the missing-path re-check
@@ -169,7 +172,7 @@ class Daemon:
             not self._config_applied or config.notify.quiet_hours != self._config.notify.quiet_hours
         )
         self._config = config
-        self._machine = machine.resolve(config.notify.machine)
+        self._machine = machine.resolve(config.notify.machine, lambda: self._computer_name)
         self._projects = {p.name: p for p in projects}
         self._debouncer.configure(config.debounce.quiet_seconds, config.debounce.max_wait_seconds)
         # The start release counts as done only once it succeeded; until then every
@@ -396,6 +399,7 @@ class Daemon:
         """
         before = self._file_version()
         config, projects, missing = load_and_resolve(self._config_path)
+        self._computer_name = await asyncio.to_thread(machine.default_name)
         self._apply_config(config, projects)
         self._health.resolve("config")  # started with a valid config
         self._record_setup()
