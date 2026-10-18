@@ -626,6 +626,38 @@ def test_status_command_shows_a_missing_project(
     assert f"gone  missing  {tmp_dir / 'gone'}" in out and "INVALID" not in out
 
 
+def test_status_command_names_the_mac(
+    monkeypatch: pytest.MonkeyPatch, tmp_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR 0023: right after the daemon line, the name messages carry."""
+    cfg = tmp_dir / "cfg" / "config.yaml"
+    cfg.parent.mkdir()
+    monkeypatch.setattr(cli, "_watchman_version", lambda: None)
+    telegram_says(monkeypatch, "no credentials")
+    seen = []
+    for text in ("", 'notify:\n  machine: " Work  MBP "\n', 'notify:\n  machine: ""\n'):
+        cfg.write_text(text)
+        assert main(["status"]) == 0
+        lines = capsys.readouterr().out.splitlines()
+        assert lines[0].startswith("daemon:")
+        seen.append(lines[1])
+    assert seen == ["machine:  Test Mac", "machine:  Work MBP", "machine:  (not named)"]
+
+
+def test_status_report_without_a_name_says_not_named() -> None:
+    text = status_report(
+        daemon_pid=None,
+        watchman_version=None,
+        telegram="no credentials",
+        projects=[],
+        config_error=None,
+        snapshot=None,
+        counts={},
+        failures=[],
+    )
+    assert text.splitlines()[1] == "machine:  (not named)"
+
+
 def test_status_with_invalid_config_exits_1(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -836,7 +868,7 @@ def test_status_report_places_the_restart_hint_under_the_telegram_line() -> None
         telegram_restart=True,
     )
     lines = text.splitlines()
-    assert lines[2:4] == ["telegram: @bot ok", RESTART_LINE]
+    assert lines[3:5] == ["telegram: @bot ok", RESTART_LINE]  # after daemon, machine, watchman
 
 
 def test_setup_passes_whether_a_daemon_holds_the_lock(

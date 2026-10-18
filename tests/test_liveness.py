@@ -19,6 +19,7 @@ from diffbell.fingerprint import Observation
 from diffbell.health import Health
 from diffbell.liveness import (
     HEARTBEAT_KEY,
+    RESTART_KEY,
     RESTART_NOTICE_EVERY,
     Heartbeat,
     heartbeat_text,
@@ -330,6 +331,7 @@ async def test_a_start_after_a_crash_sends_one_restart_message(tmp_dir: Path) ->
     assert len([t for t, _ in sender.sent if "unexpected stop" in t]) == 1
 
 
+@pytest.mark.usefixtures("nameless_mac")
 async def test_after_launchds_loop_the_first_good_start_sends_once_with_the_reason(
     tmp_dir: Path,
 ) -> None:
@@ -343,6 +345,7 @@ async def test_after_launchds_loop_the_first_good_start_sends_once_with_the_reas
     assert message.endswith("): database migration failed: disk I/O error")
 
 
+@pytest.mark.usefixtures("nameless_mac")
 async def test_the_restart_message_goes_through_health(
     tmp_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -765,3 +768,54 @@ def test_mark_done_is_best_effort(env: Env, caplog: pytest.LogCaptureFixture) ->
     env.heartbeat.mark_done_if_past(at("2026-10-09 15:00"))  # must not raise
     assert "RuntimeError" in caplog.text
     assert "secret-bearing detail" not in caplog.text
+
+
+# -- the Mac's name (ADR 0023) -------------------------------------------------------------
+
+
+def test_the_restart_messages_carry_the_signature() -> None:
+    crashed = {"running": True, "updated_at": T0 - 60, "last_started_at": T0 - 3600}
+    failed = {"running": True, "updated_at": T0 - 60, "failed_start": True}
+    sig = "Diffbell (Work MBP)"
+    assert restart_message(crashed, T0, UTC, brand=sig) == (
+        "⚠️ Diffbell (Work MBP) restarted after an unexpected stop (down 09:59–10:00)"
+    )
+    assert restart_message(failed, T0, UTC, brand=sig) == (
+        "⚠️ Diffbell (Work MBP) could not start earlier (09:59–10:00)"
+    )
+
+
+def test_the_heartbeat_text_carries_the_signature() -> None:
+    assert heartbeat_text(2, 1, [], brand="Diffbell (Work MBP)") == (
+        "✅ Diffbell (Work MBP) · watching 2 projects · 1 change yesterday · all OK"
+    )
+    assert heartbeat_text(2, 1, []).startswith("✅ Diffbell · watching")
+
+
+async def test_the_heartbeat_is_signed_with_the_mac_read_at_send_time(tmp_dir: Path) -> None:
+    env = Env(tmp_dir)
+    name = ["Work MBP"]
+    env.heartbeat = Heartbeat(
+        env.store,
+        env.sender,
+        env.health,
+        at=lambda: env.at,
+        projects=lambda: env.projects,
+        tz=UTC,
+        signature=lambda: f"Diffbell ({name[0]})",
+    )
+    await env.tick_at(at("2026-10-09 08:00", UTC))
+    name[0] = "Home Mini"
+    await env.tick_at(at("2026-10-09 09:00", UTC))
+    assert env.texts() == [
+        "✅ Diffbell (Home Mini) · watching 3 projects · 0 changes yesterday · all OK"
+    ]
+
+
+async def test_the_restart_notice_is_queued_with_the_signature(tmp_dir: Path) -> None:
+    store = Store(tmp_dir / "state.db")
+    health = Health(store, FakeSender(), clock=lambda: T0, tz=UTC)
+    crashed = {"running": True, "updated_at": T0 - 60, "last_started_at": T0 - 3600}
+    queue_restart_notice(store, health, crashed, T0, UTC, brand="Diffbell (Work MBP)")
+    problem = store.get_problem(RESTART_KEY)
+    assert problem is not None and problem.message.startswith("⚠️ Diffbell (Work MBP) restarted")

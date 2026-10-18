@@ -26,6 +26,7 @@ def events_of(store: Store, project: str) -> list[EventRow]:
     return sorted((r.event for r in rows), key=lambda e: e.id)
 
 
+@pytest.mark.usefixtures("nameless_mac")
 async def test_a_snoozed_project_is_held_then_caught_up_in_one_message(
     shared_root: Path, shared_dir: Path, tmp_dir: Path
 ) -> None:

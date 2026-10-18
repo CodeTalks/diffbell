@@ -15,6 +15,8 @@ import {
   heartbeatPreview,
   lineIssuesFor,
   listLines,
+  machineFields,
+  machineValue,
   quietPreview,
   savedValues,
   spySection,
@@ -126,6 +128,7 @@ const FIELD_INPUTS = {
   quiet_from: "s-qh-from",
   quiet_to: "s-qh-to",
   heartbeat: "s-hb-at",
+  machine: "s-machine-name",
 };
 const LIST_AREAS = { defaults: "s-defaults", ignore: "s-ignore", redact: "s-redact" };
 
@@ -139,6 +142,7 @@ export function readValues() {
     max_lines: $("s-lines").value,
     quiet_hours: $("s-qh-on").checked ? `${time("s-qh-from")}-${time("s-qh-to")}` : null,
     heartbeat: $("s-hb-on").checked ? time("s-hb-at") : null,
+    machine: machineValue($("s-machine-on").checked, $("s-machine-name").value),
     defaults: listLines($("s-defaults").value),
     ignore: listLines($("s-ignore").value),
     redact: listLines($("s-redact").value),
@@ -156,6 +160,9 @@ function fillValues(values) {
   $("s-qh-to").value = to;
   $("s-hb-on").checked = values.heartbeat !== null;
   $("s-hb-at").value = values.heartbeat || HEARTBEAT_DEFAULT;
+  const named = machineFields(values.machine);
+  $("s-machine-on").checked = named.on;
+  $("s-machine-name").value = named.text;
   $("s-defaults").value = values.defaults.join("\n");
   $("s-ignore").value = values.ignore.join("\n");
   $("s-redact").value = values.redact.join("\n");
@@ -167,6 +174,7 @@ function fillValues(values) {
 function syncSwitches() {
   setHidden($("s-qh-times"), !$("s-qh-on").checked);
   setHidden($("s-hb-times"), !$("s-hb-on").checked);
+  setHidden($("s-machine-field"), !$("s-machine-on").checked);
 }
 
 // Also what Reload runs (the conflict state): the file as it is now.
@@ -214,6 +222,9 @@ async function fetchSettings() {
   state.settingsCheckSeq += 1; // an answer about the fields before this load is dropped
   setOutcome(null);
   $("s-port").value = String(s.web.port);
+  // The detected Computer Name: what an empty field stands for (ADR 0023).
+  const detected = s.notify && typeof s.notify.machine_default === "string" ? s.notify.machine_default : "";
+  setAttr($("s-machine-name"), "placeholder", detected);
   fillValues(state.settingsSaved);
   setMessage($("s-message"), "");
   renderBuiltins(s);
@@ -234,6 +245,8 @@ const SAVED_CONTROLS = [
   "s-qh-to",
   "s-hb-on",
   "s-hb-at",
+  "s-machine-on",
+  "s-machine-name",
   "s-defaults",
   "s-ignore",
   "s-redact",

@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from diffbell import __version__, selfupdate
+from diffbell import __version__, machine, selfupdate
 from diffbell import config as config_mod
 from diffbell import daemon as daemon_mod
 from diffbell import secrets as secrets_mod
@@ -127,6 +127,7 @@ async def test_a_failing_install_check_never_stops_the_daemon(
     assert "maintenance: checking for a newer install failed" in caplog.text
 
 
+@pytest.mark.usefixtures("nameless_mac")
 async def test_a_start_after_a_version_change_sends_the_update_notice_silently(
     tmp_dir: Path,
 ) -> None:
@@ -143,6 +144,55 @@ async def test_a_start_after_a_version_change_sends_the_update_notice_silently(
     assert sender.silent[[t for t, _ in sender.sent].index(text)] is True
     assert d._store.kv_get(selfupdate.RUNNING_VERSION_KEY) == __version__
     assert d._store.get_problem(UPDATE_KEY) is None  # sent once, then gone
+
+
+async def test_a_start_names_the_mac_in_its_notices(tmp_dir: Path) -> None:
+    """ADR 0023: resolved at start (the belt's Computer Name), before the notices."""
+    sender = FakeSender()
+    d, _ = make_daemon(tmp_dir, sender, self_update=NewInstall(after=10**9))
+    d._store.kv_set(selfupdate.RUNNING_VERSION_KEY, "0.0.1")
+    stop = asyncio.Event()
+    task = asyncio.create_task(d.run(stop))
+    text = f"⬆️ Diffbell (Test Mac) updated: 0.0.1 → {__version__}"
+    while text not in [t for t, _ in sender.sent]:
+        await asyncio.sleep(0.01)
+    assert d.machine_name == "Test Mac"
+    assert d._notifier_settings().machine == "Test Mac"
+    stop.set()
+    await asyncio.wait_for(task, timeout=10)
+
+
+async def test_every_reload_resolves_the_mac_again(
+    tmp_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sender = FakeSender()
+    d, _ = make_daemon(tmp_dir, sender)
+    stubbed(d, StubWatcher())
+    d._computer_name = "Test Mac"  # what run() reads once, in a thread, at start
+    calls: list[int] = []
+
+    def counting(*args: Any, **kwargs: Any) -> str:
+        calls.append(1)
+        return "Other"
+
+    monkeypatch.setattr(machine, "computer_name", counting)
+    base = d._config_path.read_text()
+    seen = []
+    for notify in ('notify:\n  machine: "Work  MBP"\n', 'notify:\n  machine: ""\n', ""):
+        d._config_path.write_text(base + notify)
+        await d._reload()
+        settings = d._notifier_settings()
+        d._health.open("watchman", "serious", "it broke")
+        await d._health.tick(d._clock())
+        d._health.forget("watchman")
+        seen.append((d.machine_name, settings.machine, sender.sent[-1][0]))
+    assert seen == [
+        ("Work MBP", "Work MBP", "⚠️ Diffbell (Work MBP): it broke"),
+        (None, None, "⚠️ Diffbell: it broke"),
+        ("Test Mac", "Test Mac", "⚠️ Diffbell (Test Mac): it broke"),
+    ]
+    assert d._heartbeat.text(d._clock()).startswith("✅ Diffbell (Test Mac) · watching")
+    assert calls == []  # a reload never runs scutil (it would block the loop)
 
 
 async def test_one_failing_maintenance_step_does_not_skip_the_others(
@@ -352,6 +402,7 @@ async def test_a_reappeared_project_resolves_its_warning_silently(
 
 
 @pytest.mark.parametrize("status", ["subscribed", "error"])
+@pytest.mark.usefixtures("nameless_mac")
 async def test_a_watched_folder_gone_at_a_reload_is_a_lost_watch(
     tmp_dir: Path, status: str
 ) -> None:
@@ -446,6 +497,7 @@ async def test_a_removed_project_drops_its_problems_without_a_message(tmp_dir: P
     assert sender.sent == []
 
 
+@pytest.mark.usefixtures("nameless_mac")
 async def test_a_rejected_config_is_a_serious_problem_until_a_valid_one(tmp_dir: Path) -> None:
     sender = FakeSender()
     d, _, _ = make_two_project_daemon(tmp_dir, sender)

@@ -6,8 +6,8 @@ the body as the page sends it (numbers as the text typed), and
 ``config_edit.describe_validation_error`` words the config model's own errors with
 :func:`message_for`, so the page, a save and a config-load rejection say the same
 sentence. The rules are exactly the config model's (``DebounceConfig``,
-``DiffConfig``, ``NotifyConfig`` and ``check_pattern``); the page never decides
-validity itself. Pure: nothing here reads or writes a file.
+``DiffConfig``, ``NotifyConfig`` with ``machine_name_ok``, and ``check_pattern``);
+the page never decides validity itself. Pure: nothing here reads or writes a file.
 """
 
 from __future__ import annotations
@@ -18,7 +18,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from diffbell.config import HEARTBEAT_TIME, MaxBelowQuiet, QuietHoursSame, check_pattern
+from diffbell.config import (
+    HEARTBEAT_TIME,
+    MaxBelowQuiet,
+    QuietHoursSame,
+    check_pattern,
+    machine_name_ok,
+)
 
 # The one table. The page shows these texts as they are.
 MESSAGES: dict[str, str] = {
@@ -28,6 +34,7 @@ MESSAGES: dict[str, str] = {
     "lines_range": "Enter 0 to 200 lines.",
     "time_format": "Use a time like 23:00.",
     "time_differs": "Must differ from the start time.",
+    "machine_name": "Use at most 40 characters, without control characters.",
 }
 MAX_LINES = 200  # config.DiffConfig's le (tests/web/test_settings_check.py pins it)
 
@@ -98,6 +105,7 @@ class SettingsRaw:
     redact: Sequence[str]
     quiet_hours: str | None = None  # "23:00-08:00"; None: off, or the block not sent
     heartbeat: str | None = None  # "09:00"; None: off, or not sent
+    machine: str | None = None  # this Mac's name; "": none; None: Computer Name, or not sent
 
 
 def check_settings(raw: SettingsRaw) -> CheckResult:
@@ -120,6 +128,8 @@ def check_settings(raw: SettingsRaw) -> CheckResult:
         errors |= _window(raw.quiet_hours)
     if raw.heartbeat is not None and not HEARTBEAT_TIME.fullmatch(raw.heartbeat):
         errors["heartbeat"] = MESSAGES["time_format"]
+    if raw.machine is not None and not machine_name_ok(raw.machine):
+        errors["machine"] = MESSAGES["machine_name"]
     lists = {"defaults": raw.defaults, "ignore": raw.ignore, "redact": raw.redact}
     issues = {name: found for name in _LISTS if (found := _pattern_issues(lists[name]))}
     return CheckResult(errors, issues)
@@ -157,6 +167,8 @@ def message_for(error: Mapping[str, object]) -> tuple[str, str] | None:
         return "diff.max_lines", MESSAGES["lines_range"]
     if loc == ("notify", "heartbeat"):
         return "notify.heartbeat", MESSAGES["time_format"]
+    if loc == ("notify", "machine"):
+        return "notify.machine", MESSAGES["machine_name"]
     if loc == ("notify", "quiet_hours"):
         key = "time_differs" if isinstance(cause, QuietHoursSame) else "time_format"
         return "notify.quiet_hours", MESSAGES[key]

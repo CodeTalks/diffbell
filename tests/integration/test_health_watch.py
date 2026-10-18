@@ -28,6 +28,7 @@ LOST = "⚠️ Diffbell: project proj: watch lost: "
 BACK = "✅ Diffbell: project proj: watching again (down "
 
 
+@pytest.mark.usefixtures("nameless_mac")
 async def test_a_removed_project_folder_is_reported_once_and_its_return_once(
     shared_root: Path, shared_dir: Path, tmp_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

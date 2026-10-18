@@ -13,7 +13,9 @@ backoff (delivery.py); the alert policy retries every kind, AUTH and BAD_REQUEST
 included, and keeps `attempts` and `next_try_at` per row, so a down Telegram is
 tried once per backoff step, never on every 5 s tick.
 
-Alert texts are plain text (``parse_mode=None``): no file contents, no secret.
+Alert texts are plain text (``parse_mode=None``): no file contents, no secret. They
+are signed with ``signature()`` (ADR 0023: "Diffbell (Work MBP)"), read at each send;
+a notice's text is stored whole, so its producer signs it.
 """
 
 from __future__ import annotations
@@ -96,8 +98,11 @@ class Health:
         *,
         clock: Callable[[], float] = time.time,
         tz: tzinfo | None = None,  # message times; None: the Mac's local time
+        # How messages sign, read at each send (ADR 0023): "Diffbell (Work MBP)".
+        signature: Callable[[], str] = lambda: BRAND,
     ) -> None:
         self._store = store
+        self._signature = signature
         self._sender = sender
         self._clock = clock
         self._tz = tz
@@ -256,15 +261,16 @@ class Health:
             return p.message
         if p.severity != "serious":
             return None
+        brand = self._signature()
         if p.resolved_at is not None:
             span = f"{self._hhmm(p.opened_at)}–{self._hhmm(p.resolved_at)}"
             words = _resolved_words(p.key, p.message)
             if p.notified_open:
-                return f"✅ {BRAND}: {words} (down {span})"
+                return f"✅ {brand}: {words} (down {span})"
             # The "opened" message never got through: say what it was about.
-            return f"✅ {BRAND}: {words} (was down {span}: {p.message})"
+            return f"✅ {brand}: {words} (was down {span}: {p.message})"
         if not p.notified_open:
-            return f"⚠️ {BRAND}: {p.message}"
+            return f"⚠️ {brand}: {p.message}"
         return None
 
     async def tick(self, now: float, *, sending: bool = True) -> None:

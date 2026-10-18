@@ -139,6 +139,8 @@ KEEP = Keep.KEEP
 class NotifyInput:
     quiet_hours: str | None  # None: quiet hours off
     heartbeat: str | Keep | None = KEEP  # None: the heartbeat off (written as null)
+    # This Mac's name (ADR 0023): "" for none; None: the Computer Name (key removed).
+    machine: str | Keep | None = KEEP
 
 
 @dataclass(frozen=True, slots=True)
@@ -445,6 +447,9 @@ def update_settings(path: Path, expected_version: str, settings: SettingsInput) 
             heartbeat = settings.notify.heartbeat
             if not isinstance(heartbeat, Keep):
                 _set_heartbeat(data, heartbeat)
+            name = settings.notify.machine
+            if not isinstance(name, Keep):
+                _set_machine(data, name)
         if not isinstance(settings.editor, Keep):
             _set_editor(data, settings.editor)
 
@@ -487,6 +492,30 @@ def _move_blank_lines(section: CommentedMap, old_last: str, new_last: str) -> No
     section.ca.items[new_last] = [None, None, moved, None]
 
 
+def _give_back_blank_lines(section: CommentedMap, removed: str) -> None:
+    """Before ``removed`` (the block's last key) is deleted: the blank lines after the
+    block, kept in its end-of-line comment, go back to the key that becomes last
+    (appended to its own comment, if any), so the next block stays separated."""
+    keys = list(section)
+    if len(keys) < 2 or keys[-1] != removed:
+        return
+    item = section.ca.items.get(removed)
+    token = item[2] if item and len(item) > 2 else None
+    if not isinstance(token, CommentToken):
+        return
+    value = str(token.value)
+    blank = value[len(value.rstrip("\n")) :][1:]  # past the key's own line end
+    if not blank:
+        return
+    last = keys[-2]
+    target = section.ca.items.get(last)
+    own = target[2] if target and len(target) > 2 else None
+    if isinstance(own, CommentToken):
+        own.value = str(own.value) + blank
+    else:
+        section.ca.items[last] = [None, None, CommentToken("\n" + blank, token.start_mark), None]
+
+
 def _set_heartbeat(data: CommentedMap, value: str | None) -> None:
     """Write ``notify.heartbeat`` only when it changes what is in force. Off is a
     visible ``null``: the heartbeat is on by default, so removing the key would turn
@@ -500,6 +529,28 @@ def _set_heartbeat(data: CommentedMap, value: str | None) -> None:
         return
     written = _VisibleNull() if value is None else DoubleQuotedScalarString(value)
     _section(data, "notify", before="projects")["heartbeat"] = written
+
+
+def _set_machine(data: CommentedMap, value: str | None) -> None:
+    """Write ``notify.machine`` only when it changes what is in force. None (the
+    Computer Name, the default) removes the key, then the block if that emptied it;
+    a name, or ``""`` for none, is written double-quoted."""
+    notify = data.get("notify")
+    current = notify.get("machine") if isinstance(notify, CommentedMap) else None
+    if value == current:
+        return
+    if value is None:
+        if isinstance(notify, CommentedMap):
+            _give_back_blank_lines(notify, "machine")
+            del notify["machine"]
+            if not notify:
+                del data["notify"]
+        return
+    section = _section(data, "notify", before="projects")
+    keys = list(section)
+    section["machine"] = DoubleQuotedScalarString(value)
+    if keys and "machine" not in keys:  # a new last key: it takes the block's blank lines
+        _move_blank_lines(section, keys[-1], "machine")
 
 
 def web_enabled_set(path: Path) -> bool:

@@ -690,3 +690,57 @@ def test_a_catch_up_header_shows_the_branch() -> None:
         "<b>🔕 Catch-up · proj</b> · <code>main</code> · held 01:00–07:00 (quiet hours)"
     )
     assert plain.splitlines()[0] == "🔕 Catch-up · proj · main · held 01:00–07:00 (quiet hours)"
+
+
+# -- this Mac's name (machine name spec §3, ADR 0023) -------------------------------------
+
+
+def test_the_mac_ends_the_first_line_escaped_and_not_bold() -> None:
+    ctx = dataclasses.replace(CTX, machine="Work <MBP> & co")
+    html = render(ctx, SINGLE, max_lines=20, html=True)
+    plain = render(ctx, SINGLE, max_lines=20, html=False)
+    assert html.split("\n")[0] == (
+        "<b>🔑 myapp</b> · <code>main</code> · 11:42 · 💻 Work &lt;MBP&gt; &amp; co"
+    )
+    assert plain.split("\n")[0] == "🔑 myapp · main · 11:42 · 💻 Work <MBP> & co"
+    # Only the first line changes.
+    bare = render(CTX, SINGLE, max_lines=20, html=True).split("\n")
+    assert html.split("\n")[1:] == bare[1:]
+
+
+def test_the_mac_ends_a_catch_ups_first_line_too() -> None:
+    ctx = dataclasses.replace(CTX, catch_up=HELD, machine="Work MBP")
+    for html in (True, False):
+        first = render(ctx, SINGLE, max_lines=20, html=html).split("\n")[0]
+        bare = render(dataclasses.replace(ctx, machine=None), SINGLE, max_lines=20, html=html)
+        assert first == bare.split("\n")[0] + " · 💻 Work MBP"
+
+
+def test_the_link_names_the_mac_it_opens() -> None:
+    ctx = dataclasses.replace(LINKED, machine="Work MBP")
+    assert link_line(ctx, html=True) == (
+        '🔗 <a href="http://127.0.0.1:8765/?event=42">Open #42 on Work MBP</a>'
+    )
+    assert link_line(ctx, html=False) == "🔗 Open #42 on Work MBP: http://127.0.0.1:8765/?event=42"
+    more = dataclasses.replace(ctx, more=3)
+    assert link_line(more, html=False) == (
+        "🔗 Open #42 (+3 more) on Work MBP: http://127.0.0.1:8765/?event=42"
+    )
+    odd = dataclasses.replace(ctx, machine="A&B")
+    assert "Open #42 on A&amp;B</a>" in (link_line(odd, html=True) or "")
+
+
+def test_without_a_name_nothing_changes() -> None:
+    assert dataclasses.replace(CTX).machine is None
+    assert link_line(LINKED, html=True) == LINK_HTML
+
+
+def test_compose_keeps_the_mac_when_it_shrinks() -> None:
+    ctx = dataclasses.replace(LINKED, machine="Work MBP")
+    text = compose(ctx, LAYOUT, max_lines=20, html=True, limit=300).text
+    assert text.split("\n")[0].endswith(" · 💻 Work MBP")
+    assert text.endswith("Open #42 on Work MBP</a>")
+
+
+def test_the_sample_message_stays_nameless() -> None:
+    assert "💻" not in sample_message(datetime(2026, 10, 8, 11, 42))

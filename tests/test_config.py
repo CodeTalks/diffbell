@@ -20,6 +20,7 @@ from diffbell.config import (
     effective_lists,
     load_and_resolve,
     load_config,
+    machine_name_ok,
     project_identities,
     project_name,
     redact_patterns,
@@ -602,3 +603,45 @@ def test_project_identities_are_canonical_folders(tmp_dir: Path) -> None:
     )
     assert project_identities(config) == [("real", str(real)), ("g", str(tmp_dir / "gone"))]
     assert canonical_path("~") == os.path.realpath(Path.home())
+
+
+# -- notify.machine (machine name spec §2, ADR 0023) ------------------------------------
+
+
+def test_the_machine_name_is_unset_by_default() -> None:
+    assert Config().notify.machine is None
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ('notify:\n  machine: "Work MBP"\n', "Work MBP"),
+        ('notify:\n  machine: ""\n', ""),
+        ("notify:\n  machine: null\n", None),
+        ("notify:\n  machine:\n", None),
+        ("notify:\n  heartbeat: null\n", None),
+        (f'notify:\n  machine: "  {"x" * 40}  "\n', f"  {'x' * 40}  "),  # 40 after strip
+        ('notify:\n  machine: "Felix’s Mac"\n', "Felix’s Mac"),
+    ],
+)
+def test_the_machine_name_is_read(tmp_dir: Path, text: str, expected: str | None) -> None:
+    assert load_config(write(tmp_dir / "c.yaml", text)).notify.machine == expected
+
+
+@pytest.mark.parametrize("bad", ["x" * 41, "Work\nMBP", "Work\tMBP", "Work​MBP", "a‮b"])
+def test_an_invalid_machine_name_is_refused_not_cleaned(bad: str) -> None:
+    with pytest.raises(ValidationError, match="40 characters"):
+        Config.model_validate({"notify": {"machine": bad}})
+
+
+def test_the_machine_rule_is_one_function() -> None:
+    assert machine_name_ok("Work MBP") and machine_name_ok("") and machine_name_ok(" a ")
+    assert not machine_name_ok("x" * 41) and not machine_name_ok("a\x00")
+
+
+def test_the_default_config_documents_the_machine_name(tmp_dir: Path) -> None:
+    path = tmp_dir / "config.yaml"
+    write_default_config(path)
+    text = path.read_text()
+    assert '# machine: "Work MBP"' in text and "Computer Name" in text
+    assert load_config(path).notify.machine is None

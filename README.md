@@ -64,6 +64,15 @@ stores both in the Keychain, writes a default config if none exists and sends a 
 message. A daemon that is already running keeps its previous bot (or none) until you
 run `diffbell install` again; `setup` reminds you.
 
+**More than one Mac:** several Macs can share one bot and chat. Set up each Mac with
+the same token (send the bot `/start` again so the page finds the chat, or type the
+chat id). Each Mac signs what it sends with its name, macOS's Computer Name by
+default: a notification's first line ends with "· 💻 Work MBP", its link reads
+"Open #42 on Work MBP" (it opens that Mac's page, so click it there), and alerts
+and the heartbeat read "Diffbell (Work MBP)". `notify.machine` (or Settings →
+Notifications) sets another name, at most 40 characters; `""` names no Mac. See
+[docs/telegram-setup.md](docs/telegram-setup.md#using-diffbell-on-more-than-one-mac).
+
 Optional: give the bot Diffbell's name and face. In @BotFather send `/setname` and
 choose "Diffbell", then `/setuserpic` and send `docs/brand/diffbell-avatar-512.png`.
 The bot's @username can't be changed and stays as it is.
@@ -93,6 +102,7 @@ web:
 notify:
   quiet_hours: "23:00-08:00"   # optional: hold notifications, then one catch-up
   heartbeat: "09:00"           # a silent daily "all OK" (the default); null: off
+  machine: "Work MBP"          # this Mac's name in messages (default: its Computer Name; "": none)
 projects:
   - path: ~/projects/myapp
     patterns: ["migrations/**"]
@@ -407,7 +417,9 @@ visible and pauses while it is hidden.
   "Save · watching N files". Remove can be undone for 10 s.
 - **Settings:** one column with an index (Telegram · Notifications · Schedule ·
   Patterns · This page; `?view=settings&section=schedule` opens one).
-  **Notifications:** wait for quiet, never wait longer than, diff lines per file.
+  **Notifications:** wait for quiet, never wait longer than, diff lines per file,
+  and **Name this Mac in messages** (a switch; the name field's placeholder is the
+  Computer Name, used while the field is empty; off writes `machine: ""`).
   **Schedule:** quiet hours and the daily heartbeat, each a switch with its times
   and a preview ("Active now · ends 08:00", "Next: tomorrow 09:00").
   **Patterns:** the extra key files, ignore and extra redactions (each line checked

@@ -1,13 +1,13 @@
 """Render a batch as a Telegram message: layout A2 (health spec §3).
 
-    <b>🔑 myapp</b> · <code>main</code> · 11:42
+    <b>🔑 myapp</b> · <code>main</code> · 11:42 · 💻 Work MBP
     2 files · +2 −1
     ✏️ <code>package.json</code> +1 −1
     🔒 <code>.env.local</code> · contents hidden
     <blockquote expandable>package.json
     <code>   -  "a": 1
        +  "a": 2</code></blockquote>
-    🔗 <a href="http://127.0.0.1:8765/?event=42">Open #42</a>
+    🔗 <a href="http://127.0.0.1:8765/?event=42">Open #42 on Work MBP</a>
 
 The header and summary make the lock-screen preview; the diffs are folded into one
 expandable quote: a path line per file (plain), then its lines indented by three
@@ -18,7 +18,8 @@ it is never used. One ``<code>`` per line was dropped: Telegram apps ignore enti
 past about 100 per message, so a long message showed its last files plain (probe
 B in ADR 0013; one block per file, probe C, rendered every file). Above
 ENTITY_LIMIT entities, ``compose`` quotes the lines without ``<code>``. The
-plain-text fallback has no tags.
+plain-text fallback has no tags. The Mac's name (ADR 0023) ends the first line and
+the link's label; without one (``MessageContext.machine`` None) both read as before.
 """
 
 from __future__ import annotations
@@ -118,6 +119,9 @@ class MessageContext:
     more: int = 0  # the other events of a catch-up message: "#ID (+K more)"
     web_port: int | None = None  # None while the web UI is disabled
     catch_up: CatchUp | None = None
+    # This Mac's name (ADR 0023): the first line ends with " · 💻 <name>" and the link
+    # says "Open #42 on <name>". None: no name (the sample message never has one).
+    machine: str | None = None
 
 
 def message_order(reports: Sequence[FileReport]) -> list[FileReport]:
@@ -154,8 +158,11 @@ def link_line(ctx: MessageContext, *, html: bool) -> str | None:
         return None
     url = f"http://127.0.0.1:{ctx.web_port}/?event={ctx.event_id}"
     more = f" (+{ctx.more} more)" if ctx.more else ""
-    label = f"Open #{ctx.event_id}{more}"
-    return f'🔗 <a href="{url}">{label}</a>' if html else f"🔗 {label}: {url}"
+    on = f" on {ctx.machine}" if ctx.machine else ""
+    label = f"Open #{ctx.event_id}{more}{on}"
+    if html:
+        return f'🔗 <a href="{url}">{html_lib.escape(label, quote=True)}</a>'
+    return f"🔗 {label}: {url}"
 
 
 def entity_count(text: str) -> int:
@@ -233,12 +240,13 @@ def render(
         if counted
         else ""
     )
+    mac = f" · 💻 {esc(ctx.machine)}" if ctx.machine else ""
     if ctx.catch_up is None:
         head = [bold(f"🔑 {esc(ctx.project)}")]
         if ctx.branch:
             head.append(code(ctx.branch))
         head.append(f"{ctx.when:%H:%M}")
-        out = [" · ".join(head), _plural(len(ordered), "file") + totals]
+        out = [" · ".join(head) + mac, _plural(len(ordered), "file") + totals]
     else:
         c = ctx.catch_up
         removed = " (removed)" if c.removed else ""
@@ -250,7 +258,7 @@ def render(
         else:
             held = f"held {span} ({'snoozed' if c.reason == 'snooze' else 'quiet hours'})"
         out = [
-            f"{bold(f'🔕 Catch-up · {esc(ctx.project)}')}{removed}{branch} · {held}",
+            f"{bold(f'🔕 Catch-up · {esc(ctx.project)}')}{removed}{branch} · {held}{mac}",
             f"{_plural(c.changes, 'change')} in {_plural(len(ordered), 'file')}{totals}",
         ]
 

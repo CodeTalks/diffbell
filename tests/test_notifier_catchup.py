@@ -62,6 +62,7 @@ class Setup:
         self.notify_on: tuple[str, ...] = NOTIFY_KINDS
         self.quiet: str | None = None
         self.web_port: int | None = 8765
+        self.machine: str | None = None
         self.known = {"proj", "other"}
         # Configured but not resolved (a missing folder): name -> notify_on.
         self.configured: dict[str, tuple[str, ...]] = {}
@@ -80,6 +81,7 @@ class Setup:
                 web_enabled=self.web_port is not None,
                 web_port=self.web_port,
                 quiet=QuietHours.parse(self.quiet) if self.quiet else None,
+                machine=self.machine,
             ),
             clock=clock,
             configured=lambda name: self.configured.get(name),
@@ -135,6 +137,26 @@ async def test_one_catch_up_per_project_with_the_net_effect_per_file(
     assert batch.telegram_files == 2
     own = store.get_event_report(first)  # each event keeps its hold-time diff
     assert own is not None and [r["path"] for r in own.reports] == ["package.json", "new.json"]
+
+
+async def test_a_catch_up_names_the_mac_that_sent_it(
+    setup: Setup, store: Store, clock: Clock, utc: None
+) -> None:
+    setup.machine = "Work MBP"
+    store.set_snooze("proj", T0, None)
+    first = await setup.held("proj", ("a.json", M))
+    second = await setup.held("proj", ("b.json", M))
+    clock.now += 60
+    store.delete_snooze("proj", clock.now)
+    await setup.notifier.catch_up_due()
+    lines = setup.sender.sent[0][0].splitlines()
+    assert lines[0].startswith("<b>🔕 Catch-up · proj</b>")
+    assert lines[0].endswith(" (snoozed) · 💻 Work MBP")
+    assert lines[-1] == (
+        f'🔗 <a href="http://127.0.0.1:8765/?event={second}">'
+        f"Open #{second} (+1 more) on Work MBP</a>"
+    )
+    assert first < second
 
 
 async def test_the_catch_up_diff_is_built_against_head_at_send_time(

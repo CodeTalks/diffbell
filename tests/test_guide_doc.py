@@ -45,7 +45,7 @@ def test_the_generator_paths_are_the_repo_files() -> None:
 def test_every_step_the_page_links_to_exists() -> None:
     """The wizard's "How? ▸" links and ?step= name these ids."""
     ids = [s["id"] for s in guide()["sections"]]
-    assert ids == ["create", "token", "start", "test", "privacy", "troubleshooting"]
+    assert ids == ["create", "token", "start", "test", "more-macs", "privacy", "troubleshooting"]
     assert all(re.fullmatch(r"[a-z-]{1,32}", i) for i in ids)
     index = (GUIDE.parent / "index.html").read_text(encoding="utf-8")
     for step in re.findall(r'data-step="([a-z-]+)"', index):
@@ -70,6 +70,10 @@ def test_the_guide_covers_what_the_spec_lists() -> None:
         "Replace bot",
         "An earlier save didn't finish",
         "diffbell setup",
+        "Using Diffbell on more than one Mac",
+        "the same bot token",
+        "send /start to the bot again",
+        "Settings → Notifications",
     ):
         assert needle in text, needle
 

@@ -336,3 +336,39 @@ async def test_keychain_failure_is_reported_without_the_token(tmp_dir: Path) -> 
     assert any("Keychain" in line for line in said)
     assert all(TOKEN not in line for line in said)
     assert not bot.sent
+
+
+# -- the Mac's name (ADR 0023) -------------------------------------------------------------
+
+
+async def setup_message(tmp_dir: Path, config: str | None) -> str:
+    path = tmp_dir / "cfg" / "config.yaml"
+    if config is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(config)
+    bot = FakeBot()
+    code = await run_setup(
+        scripted(["y", "", ""], []),
+        make_client=lambda token, chat: bot,
+        config_path=path,
+        save=Saver(),
+        daemon_running=no_daemon,
+    )
+    assert code == 0
+    return bot.sent[0]
+
+
+async def test_the_test_message_names_the_mac(tmp_dir: Path) -> None:
+    # A new config (no notify.machine): the Computer Name (the belt's "Test Mac").
+    assert await setup_message(tmp_dir, None) == (
+        f"✅ {BRAND} (Test Mac) is set up. Key-file changes will be reported here."
+    )
+
+
+async def test_the_test_message_uses_the_configured_name_or_none(tmp_dir: Path) -> None:
+    named = await setup_message(tmp_dir / "a", 'notify:\n  machine: "Work MBP"\n')
+    assert named.startswith(f"✅ {BRAND} (Work MBP) is set up.")
+    hidden = await setup_message(tmp_dir / "b", 'notify:\n  machine: ""\n')
+    assert hidden.startswith(f"✅ {BRAND} is set up.")
+    broken = await setup_message(tmp_dir / "c", "notify: [")  # unreadable: Computer Name
+    assert broken.startswith(f"✅ {BRAND} (Test Mac) is set up.")

@@ -11,13 +11,15 @@ export const HEARTBEAT_DEFAULT = "09:00";
 
 // What the save bar covers (spec §2): exactly the fields PUT /api/settings writes.
 // Quiet hours and the heartbeat are one field each ("HH:MM-HH:MM" / "HH:MM", or null
-// when off). Telegram, the theme and the sessions are never among them.
+// when off), and so is this Mac's name (`machineValue`). Telegram, the theme and the
+// sessions are never among them.
 export const FIELDS = [
   "quiet_seconds",
   "max_wait_seconds",
   "max_lines",
   "quiet_hours",
   "heartbeat",
+  "machine",
   "defaults",
   "ignore",
   "redact",
@@ -43,6 +45,7 @@ export function savedValues(s) {
     max_lines: String(s.diff.max_lines),
     quiet_hours: notify.quiet_hours || null,
     heartbeat: notify.heartbeat === undefined ? HEARTBEAT_DEFAULT : notify.heartbeat,
+    machine: typeof notify.machine === "string" ? notify.machine : null,
     defaults: [...s.defaults],
     ignore: [...s.ignore],
     redact: [...s.redact],
@@ -74,9 +77,21 @@ export function settingsBody(values) {
     defaults: sent(values.defaults),
     ignore: sent(values.ignore),
     redact: sent(values.redact),
-    notify: { quiet_hours: values.quiet_hours, heartbeat: values.heartbeat },
+    notify: { quiet_hours: values.quiet_hours, heartbeat: values.heartbeat, machine: values.machine },
     web: { editor: values.editor },
   };
+}
+
+// This Mac's name (ADR 0023) as notify.machine holds it: "" names no Mac (the switch
+// off), null is the Computer Name (on with an empty field), else the text, trimmed.
+export function machineValue(on, text) {
+  if (!on) return "";
+  return String(text).trim() || null;
+}
+
+// The switch and the field for a notify.machine value (machineValue's inverse).
+export function machineFields(value) {
+  return { on: value !== "", text: value || "" };
 }
 
 // The server numbers a list's issues by the lines it was sent (settingsBody: the

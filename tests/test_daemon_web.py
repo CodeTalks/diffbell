@@ -135,6 +135,7 @@ async def test_web_stays_off_when_disabled(tmp_dir: Path) -> None:
     await env.close()
 
 
+@pytest.mark.usefixtures("nameless_mac")
 async def test_port_in_use_alerts_and_watching_continues(tmp_dir: Path) -> None:
     env = Env(tmp_dir)
     with socket.socket() as busy:

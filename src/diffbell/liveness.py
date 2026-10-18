@@ -256,6 +256,7 @@ def restart_message(
     tz: tzinfo | None = None,
     *,
     since: float | None = None,
+    brand: str = BRAND,
 ) -> str | None:
     """The message a successful start sends about the previous run, or None (no
     status.json, or a normal stop). The down-from time is ``since`` if given (an
@@ -272,8 +273,8 @@ def restart_message(
     failed_start = previous.get("failed_start") is True
     # A file from before the flag: a failure with no successful start ever.
     if failed_start or (reason and _number(previous.get("last_started_at")) is None):
-        return f"⚠️ {BRAND} could not start earlier ({span}){reason}"
-    return f"⚠️ {BRAND} restarted after an unexpected stop (down {span}){reason}"
+        return f"⚠️ {brand} could not start earlier ({span}){reason}"
+    return f"⚠️ {brand} restarted after an unexpected stop (down {span}){reason}"
 
 
 def queue_restart_notice(
@@ -282,6 +283,8 @@ def queue_restart_notice(
     previous: dict[str, Any] | None,
     now: float,
     tz: tzinfo | None = None,
+    *,
+    brand: str = BRAND,
 ) -> None:
     """Queue the restart message (`restart_message`) as a Health notice, at most one
     per RESTART_NOTICE_EVERY: a crash loop must not flood the chat. A notice still
@@ -293,7 +296,7 @@ def queue_restart_notice(
     if pending is not None and pending.severity != NOTICE:
         pending = None
     since = pending.opened_at if pending is not None else None
-    text = restart_message(previous, now, tz, since=since)
+    text = restart_message(previous, now, tz, since=since, brand=brand)
     if text is None:
         return
     if pending is not None:
@@ -318,9 +321,11 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
-def heartbeat_text(projects: int, changes: int, problems: list[Problem]) -> str:
+def heartbeat_text(
+    projects: int, changes: int, problems: list[Problem], *, brand: str = BRAND
+) -> str:
     head = (
-        f"✅ {BRAND} · watching {_plural(projects, 'project')} · "
+        f"✅ {brand} · watching {_plural(projects, 'project')} · "
         f"{_plural(changes, 'change')} yesterday"
     )
     serious = [p for p in problems if p.severity == "serious"]
@@ -349,7 +354,10 @@ class Heartbeat:
         # Whether Telegram is set up; while it is not, no heartbeat is sent and the
         # kv slot is left alone (bot onboarding spec §1).
         configured: Callable[[], bool] = lambda: True,
+        # How the heartbeat signs, read at each send (ADR 0023), like Health's.
+        signature: Callable[[], str] = lambda: BRAND,
     ) -> None:
+        self._signature = signature
         self._store = store
         self._sender = sender
         self._health = health
@@ -376,7 +384,9 @@ class Heartbeat:
         """The heartbeat. A serious problem still in its grace period is left out:
         its ⚠️ is not due yet (Watchman still starting is not trouble)."""
         problems = [p for p in self._health.problems() if not in_grace(p, now)]
-        return heartbeat_text(self._projects(), self.changes_yesterday(now), problems)
+        return heartbeat_text(
+            self._projects(), self.changes_yesterday(now), problems, brand=self._signature()
+        )
 
     async def tick(self, now: float) -> None:
         """Send today's heartbeat if it is due. Never raises. Nothing at all (no send,

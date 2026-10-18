@@ -564,6 +564,7 @@ main { padding: 16px 24px 48px; }
 .s-field { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .s-field input[type="time"], .s-field select { min-height: 36px; }
 .s-field input[readonly] { min-height: 36px; max-width: 96px; color: var(--muted); }
+.s-field > input[type="text"] { min-height: 36px; width: 16em; max-width: 100%; }
 /* A number with its unit inside the field ("10 seconds"): the wrapper is the box,
    so the unit can never wrap away from its number. */
 .s-input { display: inline-flex; align-items: center; min-height: 36px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }

@@ -58,6 +58,7 @@ def make_notifier(
     quiet: str | None = None,
     web_port: int | None = None,
     now: float = NOW,
+    machine: str | None = None,
 ) -> Notifier:
     project = ResolvedProject("proj", path, ("*",), (), notify_on)
     settings = NotifierSettings(
@@ -66,6 +67,7 @@ def make_notifier(
         web_enabled=web_port is not None,
         web_port=web_port,
         quiet=QuietHours.parse(quiet) if quiet else None,
+        machine=machine,
     )
     return Notifier(
         store,
@@ -250,6 +252,33 @@ async def test_the_plain_text_fallback_carries_the_url(store: Store, tmp_project
     plain, mode = sender.sent[1]
     assert mode is None
     assert plain.splitlines()[-1] == f"🔗 Open #{event_id}: http://127.0.0.1:8765/?event={event_id}"
+
+
+async def test_the_message_names_the_mac_that_sent_it(store: Store, tmp_project: Path) -> None:
+    """ADR 0023: the first line ends with the Mac's name and the link opens that Mac."""
+    sender = FakeSender([5])
+    notifier = make_notifier(store, sender, tmp_project, web_port=8765, machine="Work MBP")
+    event_id = await notifier.flush("proj", journal(store, ("package.json", M)))
+    lines = sender.sent[0][0].splitlines()
+    assert lines[0].endswith(" · 💻 Work MBP")
+    assert lines[-1] == (
+        f'🔗 <a href="http://127.0.0.1:8765/?event={event_id}">Open #{event_id} on Work MBP</a>'
+    )
+
+
+async def test_the_plain_text_fallback_names_the_mac_too(store: Store, tmp_project: Path) -> None:
+    sender = FakeSender([TelegramError(ErrorKind.BAD_REQUEST, "can't parse entities"), 9])
+    notifier = make_notifier(store, sender, tmp_project, web_port=8765, machine="Work MBP")
+    event_id = await notifier.flush("proj", journal(store, ("package.json", M)))
+    plain, mode = sender.sent[1]
+    assert mode is None and plain.splitlines()[0].endswith(" · 💻 Work MBP")
+    assert plain.splitlines()[-1] == (
+        f"🔗 Open #{event_id} on Work MBP: http://127.0.0.1:8765/?event={event_id}"
+    )
+
+
+def test_notifier_settings_have_no_mac_by_default() -> None:
+    assert NotifierSettings(redact=(), max_lines=20, web_enabled=False).machine is None
 
 
 async def test_the_whole_message_with_the_web_ui_disabled(
