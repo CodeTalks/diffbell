@@ -614,11 +614,11 @@ def _install(args: argparse.Namespace) -> int:
         print(f"tightened {_display(path)}: {old:o} -> {new:o}")
     try:
         executable = launchd.find_executable()
-        if not _is_uv_tool_path(executable):
+        if not _is_stable_agent_path(executable):
             print(
                 f'Warning: the agent will run "{executable}". Removing that environment '
-                "(e.g. a worktree .venv) breaks the agent; run `uv tool install .` and "
-                "install again from a stable location."
+                "(e.g. a worktree .venv) breaks the agent; install it with Homebrew or "
+                "`uv tool install .`, then run `diffbell install` again."
             )
         started = _install_now()
         target = launchd.install(executable, log_dir=paths.log_dir())
@@ -705,8 +705,15 @@ def _display(path: Path) -> str:
     return f"~/{path.relative_to(home)}" if path.is_relative_to(home) else str(path)
 
 
-def _is_uv_tool_path(executable: Path) -> bool:
-    return (Path.home() / ".local/share/uv/tools") in executable.parents
+def _is_stable_agent_path(executable: Path) -> bool:
+    """A location the agent can keep running from: a uv tool, or Homebrew's `opt`
+    path (it resolves into the diffbell Cellar; ADR 0021). A checkout's .venv is not."""
+    if (Path.home() / ".local/share/uv/tools") in executable.parents:
+        return True
+    try:
+        return launchd.homebrew_prefix(executable.resolve()) is not None
+    except OSError:
+        return False
 
 
 def cmd_uninstall(args: argparse.Namespace) -> int:

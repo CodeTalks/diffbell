@@ -1916,3 +1916,24 @@ def test_install_without_watchman_refuses_before_anything(
         "`brew install watchman`, then run `diffbell install` again."
     )
     assert not (tmp_dir / "cfg" / "config.yaml").exists()  # nothing written
+
+
+# -- the install's stable-location warning (ADR 0021) ----------------------------------
+
+
+def test_a_uv_tool_and_a_homebrew_install_are_stable_a_worktree_is_not(
+    tmp_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The agent runs this path for good: a uv tool or Homebrew's opt link (it
+    resolves into the Cellar) stays; a checkout's .venv may be deleted."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_dir)
+    uv_tool = tmp_dir / ".local/share/uv/tools/diffbell/bin/diffbell"
+    assert cli._is_stable_agent_path(uv_tool)
+    prefix = tmp_dir / "homebrew"
+    script = prefix / "Cellar/diffbell/0.1.4/libexec/bin/diffbell"
+    script.parent.mkdir(parents=True)
+    script.write_text("#!/bin/sh\n", encoding="utf-8")
+    (prefix / "opt").mkdir()
+    (prefix / "opt/diffbell").symlink_to(prefix / "Cellar/diffbell/0.1.4")
+    assert cli._is_stable_agent_path(prefix / "opt/diffbell/libexec/bin/diffbell")
+    assert not cli._is_stable_agent_path(tmp_dir / "repo/.worktrees/x/.venv/bin/diffbell")
