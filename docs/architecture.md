@@ -130,7 +130,7 @@ flowchart LR
 | `web.counts` | The dashboard's `watched_count`: a preview walk per project, started only by a `GET /api/dashboard` (never a timer), cached 60 s per (project, the effective lists walked); a failed count is not retried for 60 s; removed projects are forgotten, and so is a project whose watch is lost (`forget`, also a count in flight, while its `project:<name>` problem is open: the card shows "—"). Counts run one at a time through `Previewer.count_gate` and `in_gated_slot`, which holds the gate until the walk's thread ends (even if the request is cancelled), so one of the two slots always stays free for the editor. |
 | `cli`, `setup_cmd`, `launchd` | Commands, interactive setup, LaunchAgent install/uninstall; `launchd.agent_status` reads (loaded, pid) from `launchctl print`. `install` writes the default config when none exists and, while Telegram is not set up, turns the web UI on (only when `web.enabled` is absent: `config_edit.web_enabled_set`) and opens Settings → Telegram through `_open_page`, shared with `web`. The plist's `EnvironmentVariables` hold only `PATH`. Its program is `launchd.find_executable`: the `diffbell` on PATH, resolved, with a Homebrew Cellar path mapped to its stable `opt` path (`stable_executable`, ADR 0021). |
 | `doctor` | `diffbell doctor`: thirteen read-only checks (`Check(name, status, message, fix)`) with injected runners, 5 s each, side by side. Never opens the `Store` (SQLite `mode=ro`), never starts Watchman (`watchman --no-spawn --no-local` `version` and `watch-list`, no `WatchmanClient`), never prints a secret. |
-| `upgrade`, `install_source` | `diffbell upgrade`: read-only git, a 0600 SQLite backup (3 kept), `uv tool install --force --reinstall`, the new tool's `install` and `doctor --json --pending-source '<JSON>'` (the source being installed, judged by the Install check; a doctor from before Plan 7 rejects the option with exit 2 and "unrecognized arguments" and is run once more without it); `install-source.json` (0600) records the source on success. Every line it prints is flushed before the next subprocess. No automatic rollback. |
+| `upgrade`, `install_source` | `diffbell upgrade`: read-only git, `uv export --locked` (the checkout's `uv.lock` versions; a lock out of date with `pyproject.toml` is refused before anything changes), a 0600 SQLite backup (3 kept), `uv tool install --force --reinstall --constraints` with those versions (`uv tool install` ignores `uv.lock`), the new tool's `install` and `doctor --json --pending-source '<JSON>'` (the source being installed, judged by the Install check; a doctor from before Plan 7 rejects the option with exit 2 and "unrecognized arguments" and is run once more without it); `install-source.json` (0600) records the source on success. Every line it prints is flushed before the next subprocess. No automatic rollback. |
 
 `pywatchman` is imported only by `wmclient` and `watcher` (the latter for its
 exception types). Besides the connection thread, the only other threads are
@@ -1408,10 +1408,10 @@ ADR 0014. Both commands print what to do and never do it themselves.
 flowchart TD
     H{"0 Homebrew install?<br/>(running_from_homebrew)"} -->|yes| ZH(["refuse, exit 2:<br/>brew upgrade diffbell, then diffbell install"])
     H -->|no| A
-    A["1 source: --from or install-source.json<br/>pyproject names diffbell"] --> B["2 git, read-only: status --porcelain,<br/>HEAD, branch; dirty refused unless --allow-dirty"]
+    A["1 source: --from or install-source.json<br/>pyproject names diffbell"] --> B["2 git, read-only: status --porcelain,<br/>HEAD, branch; dirty refused unless --allow-dirty<br/>uv export --locked: uv.lock's versions"]
     B -->|--dry-run| Z0([print the plan, stop])
     B --> C["3 backup: state.db (mode=ro) → state-upgrade-UTC.db<br/>O_EXCL 0600, SQLite backup API, keep 3"]
-    C --> D["4 uv tool install --force --reinstall PATH"]
+    C --> D["4 uv tool install --force --reinstall<br/>--constraints (the lock, 0600 temp) PATH"]
     D --> E["5 new tool: diffbell install<br/>(uv tool bin dir first on PATH)"]
     E --> P["5b the plist's ProgramArguments[0]<br/>is the uv tool's diffbell"]
     P --> F["6 wait ≤ 30 s: status.json ready<br/>(liveness.wait_until_ready; install already waited)"]

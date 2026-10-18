@@ -56,6 +56,14 @@ Verifying Plans 5a and 5b met the same friction again and again (Plan 6 spec
   in `install-source.json` (0600) only on success. A failure from the backup on
   prints the rollback commands and the restore steps (a refused source or checkout
   changed nothing); nothing is rolled back automatically.
+- **Amended 2026-10-18: the install is pinned to the checkout's `uv.lock`.**
+  `uv tool install` resolves afresh and ignores the lock, so an upgrade could run
+  versions CI never tested (seen live: fastapi 0.144.0 and starlette 1.8.0 against a
+  lock of 0.143.0 and 1.7.0). `diffbell upgrade` now reads the lock first with
+  `uv export --locked --no-dev` (read-only; a lock out of date with `pyproject.toml`
+  is refused before the backup, so nothing changes) and passes those versions to
+  `uv tool install --constraints`, through a 0600 temp file in the state folder that
+  is removed whatever happens. A dry run checks the lock too.
 - **`dev-watchman install` returns once the restarted daemon is up** (amended
   2026-10-10). A `doctor` run a second after `install` used to report the daemon
   stopped, nothing on the web port and projects not watched, all resolved two
