@@ -20,6 +20,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from diffbell.globs import compile_glob
+from diffbell.machine import MAX_NAME, removed
 
 BUILTIN_DEFAULTS: tuple[str, ...] = (
     "package.json",
@@ -156,6 +157,18 @@ class NotifyConfig(_Strict):
     quiet_hours: str | None = None
     # The daily silent heartbeat's local time; None (null): off (health spec §5.2).
     heartbeat: str | None = HEARTBEAT_DEFAULT
+    # This Mac's name in messages (ADR 0023). None (absent or null): macOS's Computer
+    # Name; "": no name; any other text: that name.
+    machine: str | None = None
+
+    @field_validator("machine")
+    @classmethod
+    def _machine_name(cls, value: str | None) -> str | None:
+        if value is not None and not machine_name_ok(value):
+            raise ValueError(
+                f"machine must be at most {MAX_NAME} characters, without control characters"
+            )
+        return value
 
     @field_validator("heartbeat")
     @classmethod
@@ -175,6 +188,14 @@ class NotifyConfig(_Strict):
         if start == end:
             raise QuietHoursSame()
         return value
+
+
+def machine_name_ok(value: str) -> bool:
+    """`notify.machine`'s rule (the config model's and the Settings check's): after
+    strip, at most MAX_NAME characters and no control or format character. Refused,
+    never cleaned, so the user sees what is wrong."""
+    text = value.strip()
+    return len(text) <= MAX_NAME and not any(removed(ch) for ch in text)
 
 
 def _invisible(ch: str) -> bool:
@@ -449,6 +470,7 @@ web:
 notify:
   quiet_hours: null        # e.g. "23:00-08:00": hold, then one catch-up message per project
   heartbeat: "09:00"       # a silent daily "all OK" message; null turns it off
+  # machine: "Work MBP"    # this Mac's name in messages (default: its Computer Name; "" for none)
 
 redact: []                 # extra redaction patterns
 defaults: []               # extra watch patterns for every project

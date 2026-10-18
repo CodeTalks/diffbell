@@ -99,6 +99,15 @@ def never_under_launchd(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(selfupdate, "under_launchd", lambda parent=None: False)
 
 
+@pytest.fixture(autouse=True)
+def a_test_mac(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test runs `scutil` or reads this Mac's name (ADR 0023): every Computer Name
+    is "Test Mac". Tests of `machine.computer_name` itself inject the runner."""
+    from diffbell import machine
+
+    monkeypatch.setattr(machine, "computer_name", lambda run=None: "Test Mac")
+
+
 @pytest.fixture
 def tmp_dir(tmp_path: Path) -> Path:
     return Path(os.path.realpath(tmp_path))

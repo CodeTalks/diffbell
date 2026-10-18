@@ -24,6 +24,7 @@ POSITIVE = "Must be more than 0 seconds."
 LINES = "Enter 0 to 200 lines."
 TIME = "Use a time like 23:00."
 DIFFERS = "Must differ from the start time."
+MACHINE = "Use at most 40 characters, without control characters."
 
 
 def raw(**changes: Any) -> SettingsRaw:
@@ -49,6 +50,7 @@ def test_the_table_holds_the_specs_sentences() -> None:
         "lines_range": LINES,
         "time_format": TIME,
         "time_differs": DIFFERS,
+        "machine_name": MACHINE,
     }
 
 
@@ -238,6 +240,8 @@ def model_errors(data: dict[str, Any]) -> list[Any]:
         ({"notify": {"heartbeat": "9"}}, ("notify.heartbeat", TIME)),
         ({"notify": {"quiet_hours": "x"}}, ("notify.quiet_hours", TIME)),
         ({"notify": {"quiet_hours": "08:00-08:00"}}, ("notify.quiet_hours", DIFFERS)),
+        ({"notify": {"machine": "x" * 41}}, ("notify.machine", MACHINE)),
+        ({"notify": {"machine": "a\u200bb"}}, ("notify.machine", MACHINE)),
     ],
 )
 def test_message_for_words_the_config_models_errors(
@@ -294,3 +298,19 @@ def test_settings_values_refuses_a_non_number_type(typed: Any) -> None:
         settings_values(raw(quiet_seconds=typed))
     with pytest.raises(ValueError, match="passed check_settings"):
         settings_values(raw(max_lines=typed))
+
+
+# -- notify.machine (machine name spec §2) ------------------------------------------------
+
+
+@pytest.mark.parametrize("bad", ["x" * 41, "Work\nMBP", "a\u202eb", "a\x00"])
+def test_the_machine_name_has_one_rule_and_message(bad: str) -> None:
+    assert check_settings(raw(machine=bad)).errors == {"machine": MACHINE}
+    with pytest.raises(ValidationError):
+        NotifyConfig(machine=bad)
+
+
+@pytest.mark.parametrize("good", [None, "", "Work MBP", f"  {'x' * 40} ", "Felix’s Mac"])
+def test_a_valid_machine_name_or_none_passes(good: str | None) -> None:
+    assert check_settings(raw(machine=good)).ok
+    NotifyConfig(machine=good)
