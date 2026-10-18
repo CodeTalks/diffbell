@@ -218,6 +218,19 @@ async def test_a_notice_is_sent_once_verbatim_and_never_listed(
     assert store.all_problems() == []
 
 
+async def test_the_update_notice_is_sent_silently(
+    health: Health, sender: FakeSender, clock: Clock
+) -> None:
+    """ADR 0022: an update is news, not an alarm; a restart notice still rings."""
+    health.notice("update", "⬆️ Diffbell updated: 0.1.2 → 0.1.3")
+    health.notice("restart", "⚠️ Diffbell restarted after an unexpected stop")
+    await tick(health, clock)
+    assert dict(zip(texts(sender), sender.silent, strict=True)) == {
+        "⬆️ Diffbell updated: 0.1.2 → 0.1.3": True,
+        "⚠️ Diffbell restarted after an unexpected stop": False,
+    }
+
+
 async def test_problems_lists_open_ones_oldest_first(health: Health, clock: Clock) -> None:
     health.open("b", "warning", "b")
     clock.now += 1

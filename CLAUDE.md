@@ -150,6 +150,10 @@ CodeTalks; the launchd label and bundle prefix are `io.688.*`.
 - A Homebrew install (ADR 0021) is recognised only by `launchd.running_from_homebrew`;
   `upgrade` refuses it first (exit 2), and the plist names the `opt` path, never a
   versioned Cellar path (`launchd.stable_executable`).
+- A newer install stops the daemon only through `selfupdate.SelfUpdate.check`, against the
+  start snapshot, only under launchd (`under_launchd`, replaced by a conftest belt in
+  tests) and with the plist's program present (ADR 0022). The update notice is a Health
+  notice (`UPDATE_KEY`, in `health.SILENT_NOTICES`).
 - `rename_install.py` is the only code naming the old dev-watchman install. It acts   <!-- old-name -->
   on the real one only with `switchover=True` (only `install` passes it, never under a
   scratch override; tests set `REAL_SWITCHOVER_ALLOWED = False`). Its explicit Keychain

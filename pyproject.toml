@@ -1,6 +1,6 @@
 [project]
 name = "diffbell"
-version = "0.1.2"
+version = "0.1.3"
 description = "Diffbell: watch key files across your projects with Watchman and get a Telegram message when they change."
 readme = "README.md"
 requires-python = ">=3.12"

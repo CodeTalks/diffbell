@@ -12,6 +12,7 @@ import httpx
 import pytest
 from fastapi.routing import APIRoute
 
+from diffbell import __version__
 from diffbell.config import load_config
 from diffbell.fingerprint import Observation
 from diffbell.models import ChangeKind
@@ -211,6 +212,7 @@ async def test_dashboard_reads_the_snapshot_and_the_outbox(
         "connected": True,
         "config_version": "v-applied",
         "config_rejected_version": None,
+        "version": __version__,
     }
     assert body["watchman"] == {"version": "2026.10.05.00"}
     assert body["web"] == {

@@ -302,12 +302,15 @@ Locations: config `~/.config/diffbell/config.yaml`, state (SQLite, lock,
 
 ### Upgrading
 
-A Homebrew install upgrades with Homebrew, then restarts the agent:
+A Homebrew install upgrades with Homebrew alone:
 
 ```bash
 brew upgrade diffbell
-diffbell install         # the running daemon keeps the old version until then
 ```
+
+Within about a minute the agent notices the new version, stops and is started again
+by launchd on it; Telegram tells you (silently) "⬆️ Diffbell updated: 0.1.2 → 0.1.3".
+The page's footer shows the version that is running.
 
 `diffbell upgrade` is for an install from a checkout; on a Homebrew install it stops
 with exit 2 and says the two commands above.

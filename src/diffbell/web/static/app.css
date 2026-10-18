@@ -223,6 +223,8 @@ h3 { font-size: 13px; color: var(--muted); margin: 16px 0 8px; }
 }
 .banner code { overflow-wrap: anywhere; }
 main { padding: 16px 24px 48px; }
+.foot { padding: 0 24px 24px; text-align: center; color: var(--muted); font-size: 12px; }
+.foot a { color: inherit; }
 .view { margin: 0 auto; }
 /* The header's content is 1280 px less its 24 px padding: the views line up. */
 .view.wide { max-width: 1232px; }

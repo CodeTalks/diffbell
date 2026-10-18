@@ -271,6 +271,14 @@ def test_stale_text_only_after_15_seconds() -> None:
     ]
 
 
+def test_the_footer_names_the_running_version() -> None:
+    assert js_value(
+        "status.js",
+        '[m.footerVersion({daemon: {version: "0.1.3"}}), m.footerVersion(null), '
+        'm.footerVersion({daemon: {}}), m.footerVersion({daemon: {version: ""}})]',
+    ) == ["Diffbell 0.1.3", "Diffbell", "Diffbell", "Diffbell"]
+
+
 def test_every_status_icon_is_in_the_sprite() -> None:
     sprite = (STATIC_DIR / "icons.svg").read_text(encoding="utf-8")
     script = """

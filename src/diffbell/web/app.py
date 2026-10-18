@@ -33,7 +33,7 @@ from pydantic import (
 )
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from diffbell import BRAND
+from diffbell import BRAND, __version__
 from diffbell.config import (
     ALWAYS_EXCLUDED_DIRS,
     BUILTIN_DEFAULTS,
@@ -631,6 +631,8 @@ def create_app(ctx: WebContext) -> FastAPI:
                 # editor compares them with the version its save returned.
                 "config_version": snap.get("config_version"),
                 "config_rejected_version": snap.get("config_rejected_version"),
+                # The web runs in the daemon: the version serving this page (the footer).
+                "version": __version__,
             },
             "watchman": {"version": snap.get("watchman_version")},
             "web": {

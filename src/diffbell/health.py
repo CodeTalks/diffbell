@@ -39,6 +39,10 @@ NOTICE: Final = "notice"  # the severity of a one-shot message (`notice`)
 # Telegram not set up (bot onboarding spec §1): a page-only warning the daemon opens
 # at a start without credentials and resolves when the bot is saved.
 SETUP_KEY: Final = "telegram.setup"
+# The notice a start queues after a version change (selfupdate, ADR 0022).
+UPDATE_KEY: Final = "update"
+# Notices sent without a sound (disable_notification): news, not an alarm.
+SILENT_NOTICES: Final = frozenset({UPDATE_KEY})
 # A longer message (e.g. a long config error) is clipped: an alert must always fit
 # Telegram's 4096, or it would be retried forever.
 MESSAGE_MAX = 1000
@@ -300,7 +304,7 @@ class Health:
                 self._failed(problem, classify(down, problem.attempts).delay, str(down), now)
                 continue
             try:
-                await self._sender.send(text, parse_mode=None)
+                await self._sender.send(text, parse_mode=None, silent=problem.key in SILENT_NOTICES)
             except TelegramError as exc:
                 failure = classify(exc, problem.attempts)
                 self._failed(problem, failure.delay, str(exc), now)

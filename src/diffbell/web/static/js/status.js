@@ -146,6 +146,13 @@ export function statusSentence({ pollFailed, dash, now }) {
 }
 
 // "Updated 20 s ago", only once the last good poll is more than 15 s old.
+// The footer's "Diffbell 0.1.3": the version of the daemon serving the page, from
+// the dashboard poll; the name alone until the first poll answers.
+export function footerVersion(dash) {
+  const version = dash && dash.daemon && dash.daemon.version;
+  return typeof version === "string" && version ? `Diffbell ${version}` : "Diffbell";
+}
+
 export function staleText(lastOk, now) {
   if (!lastOk) return "";
   const s = Math.floor((now - lastOk) / 1000);
