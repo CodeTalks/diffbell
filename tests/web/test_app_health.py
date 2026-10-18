@@ -115,7 +115,12 @@ async def test_heartbeat_off_is_an_explicit_null_and_on_again_writes_the_time(
     assert load_config(env.config).notify.heartbeat is None
     assert "heartbeat:" in env.config.read_text()
     settings = (await client.get("/api/settings")).json()
-    assert settings["notify"] == {"quiet_hours": None, "heartbeat": None}
+    assert settings["notify"] == {
+        "quiet_hours": None,
+        "heartbeat": None,
+        "machine": None,
+        "machine_default": "Test Mac",
+    }
     assert (await put_heartbeat(env, client, "07:45")).status_code == 200
     assert load_config(env.config).notify.heartbeat == "07:45"
 

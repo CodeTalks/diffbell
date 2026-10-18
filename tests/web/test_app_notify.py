@@ -362,7 +362,12 @@ def settings_body(version: str, **extra: object) -> dict[str, object]:
 
 async def test_quiet_hours_round_trip_through_settings(env: Env, client: httpx.AsyncClient) -> None:
     body = (await client.get("/api/settings")).json()
-    assert body["notify"] == {"quiet_hours": None, "heartbeat": "09:00"}
+    assert body["notify"] == {
+        "quiet_hours": None,
+        "heartbeat": "09:00",
+        "machine": None,
+        "machine_default": "Test Mac",
+    }
     on = await client.put(
         "/api/settings",
         json=settings_body(body["config_version"], notify={"quiet_hours": "23:00-08:00"}),
@@ -372,6 +377,8 @@ async def test_quiet_hours_round_trip_through_settings(env: Env, client: httpx.A
     assert (await client.get("/api/settings")).json()["notify"] == {
         "quiet_hours": "23:00-08:00",
         "heartbeat": "09:00",
+        "machine": None,
+        "machine_default": "Test Mac",
     }
     kept = await client.put("/api/settings", json=settings_body(on.json()["config_version"]))
     assert load_config(env.config).notify.quiet_hours == "23:00-08:00"  # absent: unchanged

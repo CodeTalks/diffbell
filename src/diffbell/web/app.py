@@ -9,6 +9,7 @@ to Watchman (it never imports pywatchman and never receives the WatchmanClient).
 
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
 import time
@@ -33,7 +34,7 @@ from pydantic import (
 )
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from diffbell import BRAND, __version__
+from diffbell import BRAND, __version__, machine
 from diffbell.config import (
     ALWAYS_EXCLUDED_DIRS,
     BUILTIN_DEFAULTS,
@@ -212,6 +213,9 @@ class NotifyBody(_Body):
     quiet_hours: Text | None  # "23:00-08:00", or null for off; checked by the config
     # "09:00", or null for off; absent: unchanged (checked by the config).
     heartbeat: Text | None = None
+    # This Mac's name (ADR 0023): text, "" for none, null for the Computer Name;
+    # absent: unchanged (checked by settings_check).
+    machine: Text | None = None
 
 
 class WebBody(_Body):
@@ -241,6 +245,7 @@ class SettingsCheckBody(_Body):
             redact=self.redact,
             quiet_hours=None if notify is None else notify.quiet_hours,
             heartbeat=None if notify is None else notify.heartbeat,
+            machine=None if notify is None else notify.machine,
         )
 
 
@@ -919,6 +924,8 @@ def create_app(ctx: WebContext) -> FastAPI:
     @app.get("/api/settings")
     async def settings() -> dict[str, Any]:
         version, config = read_config()
+        # The Settings field's placeholder: scutil may take a moment, off the loop.
+        detected = await asyncio.to_thread(machine.default_name)
         return {
             "config_version": version,
             "debounce": {
@@ -936,6 +943,8 @@ def create_app(ctx: WebContext) -> FastAPI:
             "notify": {
                 "quiet_hours": config.notify.quiet_hours,
                 "heartbeat": config.notify.heartbeat,
+                "machine": config.notify.machine,
+                "machine_default": detected,
             },
         }
 
@@ -965,6 +974,7 @@ def create_app(ctx: WebContext) -> FastAPI:
             else NotifyInput(
                 body.notify.quiet_hours,
                 body.notify.heartbeat if "heartbeat" in body.notify.model_fields_set else KEEP,
+                body.notify.machine if "machine" in body.notify.model_fields_set else KEEP,
             ),
             editor=KEEP if body.web is None else body.web.editor,
         )

@@ -441,6 +441,21 @@ def test_schedule_switches_head_their_own_rows() -> None:
         assert f'<input type="time" id="{field}" aria-describedby="{field}-error">' in page
 
 
+def test_the_machine_switch_heads_its_own_row() -> None:
+    """ADR 0023: Settings → Notifications names this Mac, like the schedule switches."""
+    page = html()
+    notifications = page.split('id="s-notifications"', 1)[1].split("</section>", 1)[0]
+    assert (
+        '<h3 class="s-switch-title" id="s-machine-title">Name this Mac in messages</h3>'
+    ) in notifications
+    assert (
+        '<input type="checkbox" role="switch" class="s-switch" id="s-machine-on" '
+        'aria-labelledby="s-machine-title" aria-describedby="s-machine-help">'
+    ) in notifications
+    assert '<label class="s-label" for="s-machine-name">This Mac\'s name</label>' in notifications
+    assert 'aria-describedby="s-machine-name-help s-machine-name-error"' in notifications
+
+
 def test_the_conflict_copy_says_a_reload_discards_unsaved_changes() -> None:
     """The project editor's banner, and the settings save bar's conflict state (spec
     §2: its sentence reused verbatim, like "Saving…" and the two outcomes)."""
@@ -1266,6 +1281,7 @@ def test_every_checked_field_has_its_message_line() -> None:
         "quiet_from",
         "quiet_to",
         "heartbeat",
+        "machine",
     ]
     for _, id_ in pairs:
         assert f'<p class="s-error" id="{id_}-error"></p>' in page, id_
@@ -1275,7 +1291,7 @@ def test_every_checked_field_has_its_message_line() -> None:
     assert lists
     for _, id_ in re.findall(r'(\w+): "([\w-]+)"', lists.group(1)):
         assert f'id="{id_}-issues"' in page and f'id="{id_}-gutter"' in page, id_
-    for reveal in ("s-qh-times", "s-hb-times"):
+    for reveal in ("s-qh-times", "s-hb-times", "s-machine-field"):
         assert f'<div class="s-reveal" id="{reveal}" hidden>' in page
 
 
@@ -1305,7 +1321,7 @@ def test_the_saved_controls_are_the_ones_read_values_reads() -> None:
     assert controls and reader
     read = set(re.findall(r'(?:\$|time)\("(s-[\w-]+)"\)', reader.group(1)))
     assert set(re.findall(r'"(s-[\w-]+)"', controls.group(1))) == read
-    assert len(read) == 12
+    assert len(read) == 14
 
 
 def test_the_save_bar_is_one_polite_region_with_its_three_buttons() -> None:

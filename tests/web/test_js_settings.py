@@ -182,6 +182,7 @@ SAVED = {
     "max_lines": "20",
     "quiet_hours": "22:30-07:00",
     "heartbeat": None,
+    "machine": None,
     "defaults": ["Procfile"],
     "ignore": [],
     "redact": [],
@@ -241,6 +242,7 @@ done([
             "max_lines",
             "quiet_hours",
             "heartbeat",
+            "machine",
             "defaults",
             "ignore",
             "redact",
@@ -257,7 +259,7 @@ def test_the_body_sends_raw_text_and_trimmed_non_empty_lines() -> None:
         "defaults": ["a", "b"],
         "ignore": [],
         "redact": [],
-        "notify": {"quiet_hours": "22:30-07:00", "heartbeat": None},
+        "notify": {"quiet_hours": "22:30-07:00", "heartbeat": None, "machine": None},
         "web": {"editor": "vscode"},
     }
 
@@ -615,7 +617,7 @@ done([sent, $("s-hb-at-error").textContent, $("s-hb-at").getAttribute("aria-inva
       $("s-hb-preview").textContent]);
 """
     assert run(script) == [
-        {"quiet_hours": None, "heartbeat": ""},
+        {"quiet_hours": None, "heartbeat": "", "machine": None},
         "Use a time like 23:00.",
         "true",
         "",
@@ -691,9 +693,9 @@ done([loaded, puts()[0].body.notify, off, puts()[1].body.notify, puts()[1].body.
 """
     assert run(script) == [
         [True, "07:30", False],
-        {"quiet_hours": None, "heartbeat": "06:15"},
+        {"quiet_hours": None, "heartbeat": "06:15", "machine": None},
         True,
-        {"quiet_hours": None, "heartbeat": None},
+        {"quiet_hours": None, "heartbeat": None, "machine": None},
         "v2",
     ]
 
@@ -711,8 +713,8 @@ await settings.saveSettings();
 done(puts().map((c) => c.body.notify));
 """
     assert run(script) == [
-        {"quiet_hours": "21:00-07:00", "heartbeat": None},
-        {"quiet_hours": None, "heartbeat": None},
+        {"quiet_hours": "21:00-07:00", "heartbeat": None, "machine": None},
+        {"quiet_hours": None, "heartbeat": None, "machine": None},
     ]
 
 
@@ -1022,3 +1024,99 @@ settings.settingsEdited({{ target: $("s-theme-light") }});
 done(barView()[0]);
 """
     assert run(script) is True
+
+
+# -- this Mac's name (machine name spec §4, ADR 0023) ---------------------------------------
+
+
+def machine_settings(name: object, detected: object = "Test Mac") -> dict[str, Any]:
+    return {
+        **forms_js.SETTINGS,
+        "notify": {
+            "quiet_hours": None,
+            "heartbeat": "09:00",
+            "machine": name,
+            "machine_default": detected,
+        },
+    }
+
+
+def test_the_model_reads_the_name_in_and_out() -> None:
+    script = """
+done([
+  [null, "", "Work MBP"].map((m) => model.savedValues({ ...SAMPLE, notify: { machine: m } }).machine),
+  model.savedValues({ ...SAMPLE, notify: {} }).machine,
+  [null, "", "Work MBP"].map(model.machineFields),
+  [[true, ""], [true, "   "], [true, " Work MBP "], [false, "Work MBP"], [false, ""]]
+    .map(([on, text]) => model.machineValue(on, text)),
+  model.settingsBody({ ...model.savedValues({ ...SAMPLE, notify: { machine: "M" } }) }).notify.machine,
+]);
+""".replace("SAMPLE", json.dumps(forms_js.SETTINGS))
+    assert run(script) == [
+        [None, "", "Work MBP"],
+        None,
+        [{"on": True, "text": ""}, {"on": False, "text": ""}, {"on": True, "text": "Work MBP"}],
+        [None, None, "Work MBP", "", ""],
+        "M",
+    ]
+
+
+def test_a_named_mac_loads_the_switch_the_field_and_the_placeholder() -> None:
+    script = f"""
+const seen = [];
+for (const payload of {
+        json.dumps(
+            [
+                machine_settings("Work MBP"),
+                machine_settings(""),
+                machine_settings(None),
+                machine_settings(None, None),
+            ]
+        )
+    }) {{
+  await load(payload);
+  seen.push([$("s-machine-on").checked, $("s-machine-name").value,
+             $("s-machine-name").getAttribute("placeholder"), $("s-machine-field").hidden]);
+}}
+done(seen);
+"""
+    assert run(script) == [
+        [True, "Work MBP", "Test Mac", False],
+        [False, "", "Test Mac", True],
+        [True, "", "Test Mac", False],
+        [True, "", "", False],
+    ]
+
+
+def test_the_name_saves_its_text_empty_for_off_and_null_for_the_computer_name() -> None:
+    script = f"""
+await load({json.dumps(machine_settings(None))});
+edit("s-machine-name", "  Work MBP ");
+const dirty = model.dirtyFields(state.settingsSaved, settings.readValues());
+net.reply(200, {{ config_version: "v2" }});
+await settings.saveSettings();
+flip("s-machine-on", false);
+const hidden = $("s-machine-field").hidden;
+net.reply(200, {{ config_version: "v3" }});
+await settings.saveSettings();
+flip("s-machine-on", true);
+edit("s-machine-name", "");
+net.reply(200, {{ config_version: "v4" }});
+await settings.saveSettings();
+done([dirty, puts().map((p) => p.body.notify.machine), hidden]);
+"""
+    assert run(script) == [["machine"], ["Work MBP", "", None], True]
+
+
+def test_the_servers_message_shows_under_the_name() -> None:
+    message = "Use at most 40 characters, without control characters."
+    script = f"""
+await load({json.dumps(machine_settings(None))});
+edit("s-machine-name", "x".repeat(41));
+await pause();
+net.reply(200, {{ errors: {{ machine: {json.dumps(message)} }}, issues: {{}} }});
+await flush();
+done([$("s-machine-name-error").textContent, $("s-machine-name").getAttribute("aria-invalid"),
+      checks()[0].body.notify.machine]);
+"""
+    assert run(script) == [message, "true", "x" * 41]

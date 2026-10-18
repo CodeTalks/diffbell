@@ -239,6 +239,21 @@
                   <p class="s-error" id="s-lines-error"></p>
                 </div>
               </div>
+              <div class="s-switch-row">
+                <h3 class="s-switch-title" id="s-machine-title">Name this Mac in messages</h3>
+                <input type="checkbox" role="switch" class="s-switch" id="s-machine-on" aria-labelledby="s-machine-title" aria-describedby="s-machine-help">
+              </div>
+              <p class="s-help" id="s-machine-help">For several Macs sharing one bot: each message, alert and heartbeat says which Mac sent it.</p>
+              <div class="s-reveal" id="s-machine-field" hidden>
+                <div class="s-row">
+                  <label class="s-label" for="s-machine-name">This Mac's name</label>
+                  <div class="s-field">
+                    <input type="text" id="s-machine-name" autocomplete="off" spellcheck="false" aria-describedby="s-machine-name-help s-machine-name-error">
+                    <p class="s-help" id="s-machine-name-help">Empty: the Mac's Computer Name.</p>
+                    <p class="s-error" id="s-machine-name-error"></p>
+                  </div>
+                </div>
+              </div>
             </section>
             <section class="s-section" id="s-schedule" aria-labelledby="s-schedule-title">
               <h2 id="s-schedule-title">Schedule</h2>
