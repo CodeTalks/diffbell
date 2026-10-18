@@ -28,6 +28,32 @@ COMMIT = "0123456789abcdef0123456789abcdef01234567"
 DOCTOR_OK = [{"name": n, "status": "ok", "message": "fine", "fix": None} for n in ("A", "B")]
 
 
+# What `uv export` prints for the checkout: its uv.lock's runtime versions.
+LOCKED = "fastapi==0.143.0\n    # via diffbell\nstarlette==1.7.0\n"
+EXPORT = [
+    "uv",
+    "export",
+    "--locked",
+    "--no-dev",
+    "--no-hashes",
+    "--no-emit-project",
+    "--no-header",
+    "--directory",
+]
+
+
+class AnyFile(str):
+    """Equal to any path: the constraints file's name is a fresh temp name."""
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, str)
+
+    __hash__ = str.__hash__
+
+
+ANY_FILE = AnyFile("<constraints>")
+
+
 class World:
     """Fake git, uv and the new tool. `diffbell install` "restarts" the daemon by
     writing status.json the way a fresh start does."""
@@ -56,6 +82,8 @@ class World:
         self.old_doctor = False  # a checkout from before Plan 7: no --pending-source
         # The doctor's answers in order (exit code, stdout, stderr), overriding the above.
         self.doctor_replies: list[tuple[int, str, str]] = []
+        # What `uv tool install --constraints FILE` saw in FILE, and its mode.
+        self.constraints_seen: tuple[str, int] | None = None
 
     def now(self) -> float:
         return self.clock
@@ -73,6 +101,8 @@ class World:
             return "uv dir"
         if argv[:3] == ["uv", "tool", "install"]:
             return "uv install"
+        if argv[:2] == ["uv", "export"]:
+            return "uv export"
         return argv[1]  # the new tool: install / doctor
 
     def run(self, argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
@@ -92,6 +122,14 @@ class World:
             out = f"{self.branch}\n" if "--abbrev-ref" in argv else COMMIT + "\n"
         elif step == "uv dir":
             out = f"{self.bin}\n"
+        elif step == "uv export":
+            out = LOCKED
+        elif step == "uv install" and "--constraints" in argv:
+            file = Path(argv[argv.index("--constraints") + 1])
+            self.constraints_seen = (
+                file.read_text(encoding="utf-8"),
+                stat.S_IMODE(file.stat().st_mode),
+            )
         elif step == "install":
             self.clock += 2
             if self.daemon_starts:
@@ -229,8 +267,18 @@ def test_a_successful_upgrade(world: World) -> None:
         ["git", "-C", str(world.repo), "status", "--porcelain"],
         ["git", "-C", str(world.repo), "rev-parse", "HEAD"],
         ["git", "-C", str(world.repo), "rev-parse", "--abbrev-ref", "HEAD"],
+        [*EXPORT, str(world.repo)],
         ["uv", "tool", "dir", "--bin"],
-        ["uv", "tool", "install", "--force", "--reinstall", str(world.repo)],
+        [
+            "uv",
+            "tool",
+            "install",
+            "--force",
+            "--reinstall",
+            "--constraints",
+            ANY_FILE,
+            str(world.repo),
+        ],
         [str(world.bin / "diffbell"), "install"],
         [
             str(world.bin / "diffbell"),
@@ -268,6 +316,30 @@ def test_git_is_only_read(world: World) -> None:
         assert world.envs[step]["GIT_OPTIONAL_LOCKS"] == "0", step
 
 
+def test_the_install_is_pinned_to_the_checkouts_lock(world: World) -> None:
+    """uv tool install ignores uv.lock: the lock's versions go in as constraints, in a
+    0600 file that is gone afterwards, so an upgrade installs what CI tested."""
+    assert world.upgrade() == 0
+    assert world.constraints_seen == (LOCKED, 0o600)
+    assert not list(world.state.glob("upgrade-constraints-*"))
+
+
+def test_a_lock_that_cannot_be_exported_refuses_before_anything(world: World) -> None:
+    world.fail["uv export"] = 2
+    assert world.upgrade() == 2
+    assert world.printed[-1] == (
+        f"Upgrade failed: {world.repo}'s uv.lock doesn't match its pyproject.toml, or can't "
+        "be read (uv export exit 2): run `uv lock` there and commit it"
+    )
+    assert world.backups() == [] and ["uv", "tool", "dir", "--bin"] not in world.calls
+
+
+def test_the_constraints_file_goes_even_when_uv_fails(world: World) -> None:
+    world.fail["uv install"] = 1
+    assert world.upgrade() == 2
+    assert not list(world.state.glob("upgrade-constraints-*"))
+
+
 def test_uncommitted_changes_are_refused_unless_allowed(world: World) -> None:
     world.dirty = " M src/diffbell/cli.py\n"
     assert world.upgrade() == 2
@@ -281,7 +353,8 @@ def test_uncommitted_changes_are_refused_unless_allowed(world: World) -> None:
 
 def test_a_dry_run_installs_nothing(world: World) -> None:
     assert world.upgrade(dry_run=True) == 0
-    assert [argv[0] for argv in world.calls] == ["git", "git", "git"]
+    # Read-only: git, and the lock check, so a dry run reports a stale uv.lock too.
+    assert [argv[:2] for argv in world.calls] == [["git", "-C"]] * 3 + [["uv", "export"]]
     assert world.backups() == [] and read_source(world.state) is None
     assert world.printed[1].startswith("Dry run:")
 

@@ -323,7 +323,8 @@ diffbell upgrade                                  # later: the recorded checkout
 `upgrade` installs exactly what is checked out (it never pulls, checks out or
 commits; uncommitted changes are refused unless `--allow-dirty`), copies the
 database to `state-upgrade-<UTC time>.db` in the state directory (owner-only, the
-three newest kept), reinstalls the tool, restarts the agent, waits for the new
+three newest kept), reinstalls the tool with exactly the versions in the checkout's
+`uv.lock` (what CI tested; a lock out of date with `pyproject.toml` is refused), restarts the agent, waits for the new
 daemon and runs its `doctor`, which judges the checkout being installed (not the
 previous record). On success it records the checkout in
 `install-source.json`. On a failure from the backup on, it prints the commands to

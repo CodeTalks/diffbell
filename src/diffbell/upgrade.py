@@ -19,6 +19,7 @@ import re
 import shlex
 import sqlite3
 import subprocess
+import tempfile
 import time
 import tomllib
 from collections.abc import Callable
@@ -31,11 +32,13 @@ from diffbell import launchd, liveness, rename_install
 from diffbell.install_source import Source, read_source, write_source
 
 GIT_TIMEOUT = 10.0
+EXPORT_TIMEOUT = 60.0
 UV_TIMEOUT = 300.0
 INSTALL_TIMEOUT = 60.0
 DOCTOR_TIMEOUT = 60.0
 WAIT_SECONDS = liveness.READY_WAIT_SECONDS
 BACKUP_PREFIX = "state-upgrade-"
+CONSTRAINTS_PREFIX = "upgrade-constraints-"  # a 0600 temp file, removed after step 4
 # ADR 0021: Homebrew owns a Homebrew install; upgrade never builds a checkout over it.
 HOMEBREW_INSTALL = (
     "this Diffbell was installed with Homebrew: run `brew upgrade diffbell`, "
@@ -165,6 +168,42 @@ def read_checkout(runners: Runners, path: Path, allow_dirty: bool) -> Checkout:
     return Checkout(path, branch, commit)
 
 
+def locked_versions(runners: Runners, path: Path) -> str:
+    """Step 2b, read-only: the checkout's uv.lock as constraints (its runtime versions).
+    `uv tool install` ignores uv.lock, so step 4 passes these, and the upgrade
+    installs what CI tested. `--locked` refuses a lock out of date with pyproject."""
+    argv = [
+        "uv",
+        "export",
+        "--locked",
+        "--no-dev",
+        "--no-hashes",
+        "--no-emit-project",
+        "--no-header",
+        "--directory",
+        str(path),
+    ]
+    try:
+        result = runners.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=EXPORT_TIMEOUT,
+            check=False,
+            env=runners.env,
+        )
+    except subprocess.TimeoutExpired:
+        raise UpgradeError(f"uv export timed out after {EXPORT_TIMEOUT:g} s") from None
+    except OSError as exc:
+        raise UpgradeError(f"cannot run uv ({type(exc).__name__})") from None
+    if result.returncode != 0 or not result.stdout.strip():
+        raise UpgradeError(
+            f"{path}'s uv.lock doesn't match its pyproject.toml, or can't be read "
+            f"(uv export exit {result.returncode}): run `uv lock` there and commit it"
+        )
+    return result.stdout
+
+
 def backup(runners: Runners, state_dir: Path) -> Path | None:
     """Step 3: snapshot state.db into a new 0600 ``state-upgrade-<UTC>.db``, then
     keep the KEEP_BACKUPS newest (only that pattern is ever deleted). None if there
@@ -207,17 +246,36 @@ def _tool_bin(runners: Runners) -> Path:
     return Path(result.stdout.strip())
 
 
-def install(runners: Runners, checkout: Checkout, env: dict[str, str]) -> None:
-    """Step 4: `uv tool install --force --reinstall`, its output shown."""
-    argv = ["uv", "tool", "install", "--force", "--reinstall", str(checkout.path)]
+def install(
+    runners: Runners, checkout: Checkout, env: dict[str, str], locked: str, state_dir: Path
+) -> None:
+    """Step 4: `uv tool install --force --reinstall --constraints <the lock>`, its
+    output shown. The constraints file is 0600 (mkstemp) and removed either way."""
+    fd, name = tempfile.mkstemp(prefix=CONSTRAINTS_PREFIX, suffix=".txt", dir=state_dir)
+    constraints = Path(name)
     try:
-        result = runners.run(argv, timeout=UV_TIMEOUT, check=False, env=env)
-    except subprocess.TimeoutExpired:
-        raise UpgradeError(f"uv tool install timed out after {UV_TIMEOUT:g} s") from None
-    except OSError as exc:
-        raise UpgradeError(f"cannot run uv ({type(exc).__name__})") from None
-    if result.returncode != 0:
-        raise UpgradeError(f"uv tool install failed (exit {result.returncode})")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(locked)
+        argv = [
+            "uv",
+            "tool",
+            "install",
+            "--force",
+            "--reinstall",
+            "--constraints",
+            str(constraints),
+            str(checkout.path),
+        ]
+        try:
+            result = runners.run(argv, timeout=UV_TIMEOUT, check=False, env=env)
+        except subprocess.TimeoutExpired:
+            raise UpgradeError(f"uv tool install timed out after {UV_TIMEOUT:g} s") from None
+        except OSError as exc:
+            raise UpgradeError(f"cannot run uv ({type(exc).__name__})") from None
+        if result.returncode != 0:
+            raise UpgradeError(f"uv tool install failed (exit {result.returncode})")
+    finally:
+        constraints.unlink(missing_ok=True)
 
 
 def _tool_env(runners: Runners, bin_dir: Path) -> dict[str, str]:
@@ -472,12 +530,14 @@ def run_upgrade(options: Options, runners: Runners | None = None) -> int:
     try:
         path = resolve_source(options, previous)
         checkout = read_checkout(runners, path, options.allow_dirty)
+        locked = locked_versions(runners, path)
     except UpgradeError as exc:
         out(f"Upgrade failed: {exc}")
         return 2
     out(f"Installing {checkout.branch} @ {checkout.short} from {checkout.path}")
     if options.dry_run:
-        out("Dry run: would back up state.db, run uv tool install --force --reinstall,")
+        out("Dry run: would back up state.db, run uv tool install --force --reinstall")
+        out("with uv.lock's versions as constraints,")
         out("restart the agent (diffbell install) and run diffbell doctor.")
         return 0
     backup_path: Path | None = None
@@ -490,7 +550,7 @@ def run_upgrade(options: Options, runners: Runners | None = None) -> int:
                 out(f"Backed up the database to {backup_path}")
         bin_dir = _tool_bin(runners)
         env = _tool_env(runners, bin_dir)
-        install(runners, checkout, env)
+        install(runners, checkout, env, locked, options.state_dir)
         executable = bin_dir / "diffbell"
         started = restart(runners, executable, env)
         check_plist(runners, executable)
