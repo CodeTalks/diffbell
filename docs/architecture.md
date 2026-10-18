@@ -1419,7 +1419,7 @@ ADR 0014. Both commands print what to do and never do it themselves.
 
 ```mermaid
 flowchart TD
-    H{"0 Homebrew install?<br/>(running_from_homebrew)"} -->|yes| ZH(["refuse, exit 2:<br/>brew upgrade diffbell, then diffbell install"])
+    H{"0 Homebrew install?<br/>(running_from_homebrew)"} -->|yes| ZH(["refuse, exit 2:<br/>brew update, then brew upgrade diffbell"])
     H -->|no| A
     A["1 source: --from or install-source.json<br/>pyproject names diffbell"] --> B["2 git, read-only: status --porcelain,<br/>HEAD, branch; dirty refused unless --allow-dirty<br/>uv export --locked: uv.lock's versions"]
     B -->|--dry-run| Z0([print the plan, stop])

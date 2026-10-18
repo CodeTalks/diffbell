@@ -24,8 +24,9 @@ fight Homebrew over the same command, and `doctor`'s Install check knows only
   is kept resolved, as before.
 - A Homebrew install is recognised from the running interpreter
   (`launchd.running_from_homebrew`: `sys.prefix`, resolved, inside that Cellar).
-  - `diffbell upgrade` refuses it first, with exit 2: "run `brew upgrade diffbell`,
-    then `diffbell install` to restart the agent". It never builds a checkout over a
+  - `diffbell upgrade` refuses it first, with exit 2: "run `brew update`, then
+    `brew upgrade diffbell`; the agent restarts itself on the new version" (ADR 0022;
+    `brew update` because `brew upgrade` may skip refreshing the tap). It never builds a checkout over a
     Homebrew install.
   - `doctor`'s Install check is ok with "Homebrew (<prefix>), diffbell <version>";
     `install-source.json` is not consulted.
