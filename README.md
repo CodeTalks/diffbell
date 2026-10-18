@@ -520,8 +520,11 @@ The web page's JS tests need node ≥ 22.7 and are skipped without it; set
    wheel, checks the sdist (`scripts/release_check.py`), and publishes a GitHub
    release with both files and `SHA256SUMS`.
 4. Update the Homebrew tap: `uv run python scripts/bump_formula.py 0.2.0 --dry-run`
-   shows the formula diff; without `--dry-run` it opens the tap PR. Merge it once the
-   tap's `brew test-bot` check passes.
+   shows the formula diff; without `--dry-run` it opens the tap PR. Once the tap's
+   `brew test-bot` check passes, publish it with the tap's **brew pr-pull** workflow
+   (`gh workflow run publish.yml --repo CodeTalks/homebrew-tap -f pull_request=<PR>`),
+   not GitHub's merge button: it uploads the bottles (prebuilt for macOS 15 and 26 on
+   Apple silicon) and adds the formula's `bottle do` block.
 
 ## Security
 

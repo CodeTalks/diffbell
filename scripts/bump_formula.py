@@ -12,7 +12,7 @@ formula on the tap's main or on that branch already matches.
 
 Every GitHub call goes through `gh`, so it acts as `GH_TOKEN` when set and as the
 `gh auth login` account otherwise. The tap's own CI (`brew test-bot`) builds and
-tests the PR; merging it publishes the new version.
+tests the PR and builds its bottles; the tap's brew pr-pull workflow publishes it.
 """
 
 from __future__ import annotations
@@ -183,7 +183,8 @@ def open_pr(gh: Gh, release: Release, branch: str, tap: str = TAP, repo: str = R
         f"Moves the formula to [Diffbell {release.version}]"
         f"(https://github.com/{repo}/releases/tag/{release.tag}): the release's sdist and its "
         "SHA256SUMS, with the resources rendered from the tag's `uv.lock`.\n\n"
-        "Opened by `scripts/bump_formula.py`. Merge once `brew test-bot` passes."
+        "Opened by `scripts/bump_formula.py`. Once `brew test-bot` passes, publish it with "
+        "the **brew pr-pull** workflow (it uploads the bottles); don't use the merge button."
     )
     title = f"diffbell {release.version}"
     out = gh(
