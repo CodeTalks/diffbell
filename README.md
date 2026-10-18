@@ -315,6 +315,7 @@ Locations: config `~/.config/diffbell/config.yaml`, state (SQLite, lock,
 A Homebrew install upgrades with Homebrew alone:
 
 ```bash
+brew update               # fetches the tap: brew upgrade alone may not see a new version yet
 brew upgrade diffbell
 ```
 
@@ -323,7 +324,7 @@ by launchd on it; Telegram tells you (silently) "⬆️ Diffbell updated: 0.1.2 
 The page's footer shows the version that is running.
 
 `diffbell upgrade` is for an install from a checkout; on a Homebrew install it stops
-with exit 2 and says the two commands above.
+with exit 2 and names the two commands above.
 
 ```bash
 diffbell upgrade --from ~/projects/diffbell   # the first time

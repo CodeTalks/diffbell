@@ -237,8 +237,8 @@ def test_a_homebrew_install_refuses_the_upgrade(
     monkeypatch.setattr(launchd, "running_from_homebrew", lambda: Path("/opt/homebrew"))
     assert world.upgrade() == 2
     assert world.printed == [
-        "Upgrade failed: this Diffbell was installed with Homebrew: run "
-        "`brew upgrade diffbell`, then `diffbell install` to restart the agent."
+        "Upgrade failed: this Diffbell was installed with Homebrew: run `brew update`, "
+        "then `brew upgrade diffbell`; the agent restarts itself on the new version."
     ]
     assert world.calls == []  # no git, no uv
     assert world.backups() == [] and read_source(world.state) is None

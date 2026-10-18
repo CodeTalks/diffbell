@@ -41,8 +41,8 @@ BACKUP_PREFIX = "state-upgrade-"
 CONSTRAINTS_PREFIX = "upgrade-constraints-"  # a 0600 temp file, removed after step 4
 # ADR 0021: Homebrew owns a Homebrew install; upgrade never builds a checkout over it.
 HOMEBREW_INSTALL = (
-    "this Diffbell was installed with Homebrew: run `brew upgrade diffbell`, "
-    "then `diffbell install` to restart the agent."
+    "this Diffbell was installed with Homebrew: run `brew update`, "
+    "then `brew upgrade diffbell`; the agent restarts itself on the new version."
 )
 # Only files named exactly like the backups this command makes are ever pruned.
 BACKUP_NAME = re.compile(r"state-upgrade-\d{8}T\d{6}Z\.db")
