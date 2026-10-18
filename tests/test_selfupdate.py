@@ -85,7 +85,7 @@ def test_a_new_install_under_launchd_asks_for_a_restart(caplog: pytest.LogCaptur
     check = updater(disk)
     assert check.check(1000.0) is None
     disk.install = Install("0.1.2", BREW_1)
-    assert check.check(1030.0) is None  # within SELF_CHECK_EVERY: not even looked at
+    assert check.check(1005.0) is None  # within SELF_CHECK_EVERY: not even looked at
     assert disk.reads == 1
     assert check.check(1000.0 + selfupdate.SELF_CHECK_EVERY) == "0.1.3"
     assert "Diffbell 0.1.3 is installed (running 0.1.2): restarting" in caplog.text

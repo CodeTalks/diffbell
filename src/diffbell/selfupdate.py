@@ -30,7 +30,10 @@ from diffbell.store import Store
 
 log = logging.getLogger(__name__)
 
-SELF_CHECK_EVERY = 60.0
+# Cheap (a readlink and a metadata read), and short on purpose: after `brew upgrade`
+# deletes the old Cellar, the old daemon (its web page included) runs from deleted
+# files until it restarts.
+SELF_CHECK_EVERY = 10.0
 RUNNING_VERSION_KEY = "running_version"  # Store kv: the version that ran last
 
 

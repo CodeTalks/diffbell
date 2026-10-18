@@ -14,7 +14,9 @@ running user agents commonly restart themselves when they notice they were repla
 - `selfupdate.Install.current()` records, at daemon start, what is installed: the
   version this environment would import (`importlib.metadata`) and, for a Homebrew
   install, the resolved `<prefix>/opt/diffbell`.
-- The maintenance loop asks `SelfUpdate.check` at most every 60 s. It reports a newer
+- The maintenance loop asks `SelfUpdate.check` at most every 10 s (a readlink and a
+  metadata read; amended from 60 s on 2026-10-19: on a second Mac the old daemon's web
+  page failed for the minute it ran from the deleted Cellar). It reports a newer
   install only against that start snapshot: Homebrew's `opt` link now names another
   Cellar version (an `opt` link that went away is no new version), or, otherwise, the
   installed version changed. A process started on the new version takes its snapshot
@@ -37,7 +39,8 @@ running user agents commonly restart themselves when they notice they were repla
   restart is visible there.
 
 ## Consequences
-- `brew upgrade diffbell` is the whole upgrade: within about a minute the agent runs
+- `brew upgrade diffbell` is the whole upgrade: within about 20 s (the check, then
+  launchd's 10 s throttle) the agent runs
   the new version and Telegram says so, silently. The formula's caveat and the README
   drop "run `diffbell install` after every upgrade".
 - A daemon run by hand never stops itself; it warns and keeps the old code.

@@ -64,7 +64,7 @@ flowchart LR
     DM -- "maintenance: heartbeat" --> LV
     LV -- "silent send" --> SL
     LV -- "restart notice" --> H
-    DM -- "maintenance: check (60 s) → stop for launchd" --> SU
+    DM -- "maintenance: check (10 s) → stop for launchd" --> SU
     SU -- "update notice (silent)" --> H
     DM -- "resolve notify.machine (start, every reload)" --> MC
     MC -. "name: NotifierSettings · signature: Health, Heartbeat, notices" .-> N & H & LV
@@ -119,7 +119,7 @@ flowchart LR
 | `health` | The registry of operational problems (`open`, `resolve`, `forget`, one-shot `notice`); `tick` sends a serious problem once past its grace and its resolution once, as plain text, retried on the shared backoff per row ([ADR 0012](adr/0012-health-registry-and-liveness.md)); `tick(now, sending=False)` while Telegram is not set up deletes notices and resolved rows unsent, and `rearm` at a save gets each open, unannounced serious problem announced once (a running grace is kept; one with failed attempts starts over). Alerts sign with `signature()`, read at each send ("⚠️ Diffbell (Work MBP): …", ADR 0023). |
 | `liveness` | `status.json`: the atomic 0600 write, `write_failure_status` (no watcher needed), `restart_message`; `wait_until_ready` (`install`, `upgrade`); the silent daily `Heartbeat`. The restart notice and the heartbeat carry the daemon's signature ("✅ Diffbell (Work MBP) · watching …", ADR 0023). |
 | `machine` | This Mac's name in messages ([ADR 0023](adr/0023-name-the-mac-in-messages.md)): `computer_name` (`scutil --get ComputerName`, else the host name without `.local`; never raises), `clean` (no control/format/bidi characters, whitespace collapsed, at most 40), `resolve(notify.machine)` (absent: the Computer Name; `""`: none; else the text) and `signature` ("Diffbell (Work MBP)"). The daemon resolves it at start and at every reload; tests never run `scutil` (a conftest belt). |
-| `selfupdate` | `Install.current` at start (installed version; Homebrew's resolved `opt/diffbell`); `SelfUpdate.check` from maintenance, at most every 60 s, against that start snapshot: a newer install under launchd stops the daemon normally and `KeepAlive` starts the new one (outside launchd it only warns); `queue_update_notice` at start, the silent "updated: Y → X" notice ([ADR 0022](adr/0022-self-restart-after-an-upgrade.md)). |
+| `selfupdate` | `Install.current` at start (installed version; Homebrew's resolved `opt/diffbell`); `SelfUpdate.check` from maintenance, at most every 10 s, against that start snapshot: a newer install under launchd stops the daemon normally and `KeepAlive` starts the new one (outside launchd it only warns); `queue_update_notice` at start, the silent "updated: Y → X" notice ([ADR 0022](adr/0022-self-restart-after-an-upgrade.md)). |
 | `lock` | Singleton `flock` on `daemon.lock`; `holder_pid()` for `status`. |
 | `paths` | Config, state and log locations, with `DIFFBELL_*` environment overrides; `own_paths` (diffbell's own dirs and files), `tighten_install` (narrows them) and `loose_modes` (reports them, read-only, for `doctor`). |
 | `models` | `Change`, `ChangeKind`, net-effect `collapse()`. |
