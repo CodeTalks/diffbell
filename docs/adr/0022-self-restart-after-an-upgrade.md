@@ -19,8 +19,9 @@ running user agents commonly restart themselves when they notice they were repla
   Cellar version (an `opt` link that went away is no new version), or, otherwise, the
   installed version changed. A process started on the new version takes its snapshot
   from the same disk, so it never sees a change: no restart loop.
-- On a change, only when launchd runs the daemon (`XPC_SERVICE_NAME` is the label)
-  and the plist's program exists and is executable, the daemon logs it and sets its
+- On a change, only when launchd runs the daemon (its parent is launchd, pid 1;
+  `XPC_SERVICE_NAME` can't be used: libxpc aborts a process that claims a job name
+  it wasn't given) and the plist's program exists and is executable, the daemon logs it and sets its
   `stop` event: a normal stop (`status.json` says not running, so no "unexpected
   stop" notice), exit 0, and launchd's `KeepAlive` starts the new version after its
   10 s throttle. Otherwise (`diffbell run` by hand) it logs one warning. A failing

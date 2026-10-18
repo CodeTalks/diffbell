@@ -92,11 +92,11 @@ def watchman_is_installed(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(autouse=True)
 def never_under_launchd(monkeypatch: pytest.MonkeyPatch) -> None:
     """No test's daemon believes launchd runs it, so none stops itself for a "newer
-    install" (ADR 0022), whatever the shell's XPC_SERVICE_NAME. Tests of the guard
-    inject `managed=` or call `under_launchd` with an explicit environment."""
+    install" (ADR 0022), even when the test run's parent happens to be launchd. Tests
+    of the guard inject `managed=` or call `under_launchd` with an explicit parent."""
     from diffbell import selfupdate
 
-    monkeypatch.setattr(selfupdate, "under_launchd", lambda environ=None: False)
+    monkeypatch.setattr(selfupdate, "under_launchd", lambda parent=None: False)
 
 
 @pytest.fixture

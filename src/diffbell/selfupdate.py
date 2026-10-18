@@ -6,7 +6,7 @@ differs from that start snapshot (Homebrew's `opt/diffbell` now names another Ce
 version, or the environment's installed version changed), the daemon stops normally
 and launchd's KeepAlive starts the new version. Only the start snapshot is compared,
 so a freshly started process never sees a change: no restart loop. Outside launchd
-(`diffbell run` by hand), or with no plist program to come back to, it only warns.
+(its parent isn't pid 1: `diffbell run` by hand), or with no plist program to come back to, it only warns.
 
 At the next start `queue_update_notice` compares the running version with the one
 recorded last time and queues a silent Health notice ("updated: Y → X"), whatever
@@ -20,7 +20,7 @@ import importlib.metadata
 import logging
 import os
 import plistlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -77,9 +77,11 @@ def replaced(start: Install, now: Install) -> str | None:
     return None
 
 
-def under_launchd(environ: Mapping[str, str] = os.environ) -> bool:
-    """launchd names each job's process with its label."""
-    return environ.get("XPC_SERVICE_NAME") == launchd.LABEL
+def under_launchd(parent: Callable[[], int] = os.getppid) -> bool:
+    """launchd (pid 1) is the parent of every job it starts; a daemon run by hand has
+    a shell for a parent. (XPC_SERVICE_NAME can't be checked instead: a process that
+    claims a job name launchd didn't give it is aborted by libxpc.)"""
+    return parent() == 1
 
 
 def plist_program(plist: Path | None = None) -> Path | None:

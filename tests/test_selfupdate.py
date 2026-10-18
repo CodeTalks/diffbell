@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from diffbell import launchd, selfupdate
+from diffbell import selfupdate
 from diffbell.selfupdate import Install, SelfUpdate, replaced
 from diffbell.store import Store
 
@@ -110,11 +110,10 @@ def test_outside_launchd_or_without_a_program_it_only_warns_once(
     assert caplog.text.count("restart it to run the new version") == 1
 
 
-def test_under_launchd_reads_the_job_label(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_under_launchd_means_launchd_is_the_parent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.undo()  # the conftest belt replaces it for every other test
-    assert selfupdate.under_launchd({"XPC_SERVICE_NAME": launchd.LABEL})
-    assert not selfupdate.under_launchd({"XPC_SERVICE_NAME": "application.com.apple.Terminal"})
-    assert not selfupdate.under_launchd({})
+    assert selfupdate.under_launchd(lambda: 1)  # launchd's child
+    assert not selfupdate.under_launchd(lambda: 4242)  # a shell's
 
 
 def test_plist_program_needs_an_executable(tmp_dir: Path) -> None:
