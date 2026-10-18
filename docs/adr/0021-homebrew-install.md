@@ -55,8 +55,13 @@ Updating the tap for a release is a pull request on the tap, opened by
   `permissions: contents: read`, passes the token as `GH_TOKEN`, and skips with a
   notice when the secret is absent through a step-level `if` on an `env:` value
   (a job-level `if` on `secrets.*` is the fragile form).
-- The tap's CI (`brew test-bot`) builds, installs and tests the PR; merging it
-  publishes the version.
+- The tap's CI (`brew test-bot`) builds, installs and tests the PR and builds a
+  bottle on each macOS in its matrix (15 and 26, Apple silicon). The tap's `brew
+  pr-pull` workflow publishes it: it uploads the bottles to the tap's releases, adds
+  the `bottle do` block and pushes to `main` (the tap's own token: nothing leaves the
+  tap). So `brew install` pours a prebuilt bottle on those systems instead of
+  building every Python dependency from source (about 2.5 minutes); other systems
+  still build from source.
 
 ## Consequences
 - The agent survives `brew upgrade`: launchd runs the `opt` path, whose script's
