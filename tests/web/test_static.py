@@ -928,6 +928,16 @@ def test_the_header_shows_the_diffbell_lockup() -> None:
     assert "color: var(--text);" in css_rules[".brand-word"]
 
 
+def test_the_footer_shows_the_version_copyright_and_licence() -> None:
+    page = html()
+    assert '<span id="foot-version">Diffbell</span> · © 2026 CodeTalks ·' in page
+    # A plain link out: a new tab that can't reach back into the page.
+    assert (
+        '<a href="https://github.com/CodeTalks/diffbell/blob/main/LICENSE" '
+        'target="_blank" rel="noopener noreferrer">MIT License</a>'
+    ) in page
+
+
 def _hex_tokens(block: str) -> dict[str, str]:
     tokens: dict[str, str] = {}
     for name, value in re.findall(r"(--[a-z-]+):\s*#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b", block):

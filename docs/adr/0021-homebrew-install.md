@@ -32,8 +32,8 @@ fight Homebrew over the same command, and `doctor`'s Install check knows only
 - The formula lives in the tap repository (`CodeTalks/homebrew-tap`), installs from the
   GitHub release's sdist, depends on `watchman` and Homebrew's `python@3.15`,
   `pydantic` and `certifi`, and builds the other dependencies from their sdists. Its
-  caveats say to run `diffbell install` after installing and after every
-  `brew upgrade` (the running daemon keeps the old code until it restarts). Its test
+  caveats say to run `diffbell install` after installing (and, before ADR 0022,
+  after every `brew upgrade`). Its test
   runs only `diffbell --version` and `diffbell help`.
 
 Updating the tap for a release is a pull request on the tap, opened by
@@ -61,7 +61,7 @@ Updating the tap for a release is a pull request on the tap, opened by
 ## Consequences
 - The agent survives `brew upgrade`: launchd runs the `opt` path, whose script's
   interpreter is the new version's once Homebrew relinks.
-- Until `diffbell install` runs after an upgrade, the old daemon keeps running from a
-  deleted folder; the caveat says so, and `install` restarts it.
+- After an upgrade the old daemon keeps running until it restarts; since ADR 0022 it
+  notices the new version and restarts itself within about a minute.
 - Two installs at once (uv tool and Homebrew) are possible; whichever `diffbell`
   comes first on PATH is the one `install` writes into the plist.

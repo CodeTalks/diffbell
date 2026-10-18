@@ -19,12 +19,13 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from diffbell import __version__, selfupdate
 from diffbell import config as config_mod
 from diffbell import daemon as daemon_mod
 from diffbell import secrets as secrets_mod
 from diffbell.daemon import Daemon
 from diffbell.fingerprint import Observation
-from diffbell.health import SETUP_KEY, Health
+from diffbell.health import SETUP_KEY, UPDATE_KEY, Health
 from diffbell.liveness import HEARTBEAT_KEY
 from diffbell.models import ChangeKind
 from diffbell.notifier import Notifier
@@ -43,7 +44,9 @@ def no_watchman() -> NoReturn:
     raise OSError("watchman is not running (test)")
 
 
-def make_daemon(tmp_dir: Path, sender: FakeSender | None = None) -> tuple[Daemon, Path]:
+def make_daemon(
+    tmp_dir: Path, sender: FakeSender | None = None, **options: Any
+) -> tuple[Daemon, Path]:
     proj = tmp_dir / "proj"
     proj.mkdir()
     config = tmp_dir / "cfg" / "config.yaml"
@@ -59,6 +62,7 @@ def make_daemon(tmp_dir: Path, sender: FakeSender | None = None) -> tuple[Daemon
         wm_factory=no_watchman,
         recv_timeout=0.05,
         maintenance_interval=0.02,
+        **options,
     )
     return d, state / "status.json"
 
@@ -81,6 +85,64 @@ async def test_clean_shutdown_writes_a_not_running_snapshot(tmp_dir: Path) -> No
     snapshot = json.loads(status.read_text())
     assert snapshot["running"] is False
     assert "pid" in snapshot and "updated_at" in snapshot
+
+
+class NewInstall:
+    """A SelfUpdate stand-in: a newer version appears after `after` checks."""
+
+    def __init__(self, after: int = 2, fail: bool = False) -> None:
+        self.after, self.fail, self.checks = after, fail, 0
+
+    def __call__(self, running: str) -> NewInstall:
+        return self
+
+    def check(self, now: float) -> str | None:
+        self.checks += 1
+        if self.fail:
+            raise OSError("plist unreadable")
+        return "9.9.9" if self.checks > self.after else None
+
+
+async def test_a_newer_install_stops_the_daemon_cleanly(tmp_dir: Path) -> None:
+    """ADR 0022: the daemon stops by itself; launchd's KeepAlive starts the new one."""
+    watch = NewInstall()
+    d, status = make_daemon(tmp_dir, self_update=watch)
+    await asyncio.wait_for(d.run(asyncio.Event()), timeout=10)  # nobody sets stop
+    assert watch.checks == 3
+    assert json.loads(status.read_text())["running"] is False  # a normal stop
+
+
+async def test_a_failing_install_check_never_stops_the_daemon(
+    tmp_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    watch = NewInstall(fail=True)
+    d, _ = make_daemon(tmp_dir, self_update=watch)
+    stop = asyncio.Event()
+    task = asyncio.create_task(d.run(stop))
+    while watch.checks < 3:
+        await asyncio.sleep(0.01)
+    assert not task.done()
+    stop.set()
+    await asyncio.wait_for(task, timeout=10)
+    assert "maintenance: checking for a newer install failed" in caplog.text
+
+
+async def test_a_start_after_a_version_change_sends_the_update_notice_silently(
+    tmp_dir: Path,
+) -> None:
+    sender = FakeSender()
+    d, _ = make_daemon(tmp_dir, sender, self_update=NewInstall(after=10**9))
+    d._store.kv_set(selfupdate.RUNNING_VERSION_KEY, "0.0.1")
+    stop = asyncio.Event()
+    task = asyncio.create_task(d.run(stop))
+    text = f"⬆️ Diffbell updated: 0.0.1 → {__version__}"
+    while text not in [t for t, _ in sender.sent]:
+        await asyncio.sleep(0.01)
+    stop.set()
+    await asyncio.wait_for(task, timeout=10)
+    assert sender.silent[[t for t, _ in sender.sent].index(text)] is True
+    assert d._store.kv_get(selfupdate.RUNNING_VERSION_KEY) == __version__
+    assert d._store.get_problem(UPDATE_KEY) is None  # sent once, then gone
 
 
 async def test_one_failing_maintenance_step_does_not_skip_the_others(

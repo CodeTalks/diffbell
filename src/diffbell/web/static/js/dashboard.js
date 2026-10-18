@@ -6,7 +6,7 @@ import { api, errorSentence } from "./api.js";
 import { $, h, icon, plural, reconcile, setAttr, setClass, setHidden, setIcon, setMessage, setText, shown } from "./dom.js";
 import { ATTENTION, setFilter } from "./feed.js";
 import { state } from "./state.js";
-import { projectStatus, staleText, statusSentence, undelivered } from "./status.js";
+import { footerVersion, projectStatus, staleText, statusSentence, undelivered } from "./status.js";
 import { ago, dayTitle, untilText } from "./time.js";
 import { showToast } from "./toast.js";
 
@@ -546,6 +546,7 @@ export function renderHeader() {
   setAttr(sentence.link ? link : text, "title", sentence.text); // the whole sentence, when cut
   setText($("status-live"), sentence.live); // written only when it changes, so announced once
   setText($("refreshed"), staleText(state.lastPollOk, now));
+  setText($("foot-version"), footerVersion(state.dash));
 }
 
 // "Telegram isn't set up — N changes are waiting. Set up ▸" (bot onboarding spec

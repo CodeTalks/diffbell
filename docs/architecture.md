@@ -24,6 +24,7 @@ flowchart LR
         DM["daemon<br/>pump, maintenance, reload"]
         H["health<br/>problems: open once, resolve once"]
         LV["liveness<br/>status.json at stop/start · heartbeat"]
+        SU["selfupdate<br/>newer install? · update notice"]
         DL["delivery<br/>classify · backoff"]
         S[("store · SQLite WAL (schema v7)<br/>projects · clocks · hashes · changes · events · event_reports · batch_reports<br/>snoozes · problems · kv · web_logins · web_sessions · web_requests")]
         C["config.yaml<br/>source of truth"]
@@ -62,6 +63,8 @@ flowchart LR
     DM -- "maintenance: heartbeat" --> LV
     LV -- "silent send" --> SL
     LV -- "restart notice" --> H
+    DM -- "maintenance: check (60 s) → stop for launchd" --> SU
+    SU -- "update notice (silent)" --> H
     KC -. "token, chat id (read once at start)" .-> SL
     SL -. "configured: hold · mute · skip" .-> N & H & LV
     DM -- "pump PDUs" --> W
@@ -111,6 +114,7 @@ flowchart LR
 | `secrets` | Keychain get/set/delete through `/usr/bin/security` under `service()` (`io.688.diffbell`, or the scratch-only `DIFFBELL_KEYCHAIN_SERVICE`: only `io.688.diffbell` or `io.688.diffbell-<suffix>`); `credentials()` (the pair, or why it is not set up: both absent, one absent, the `save-pending` marker; a read error raises) and `save_credentials` (both values checked, then marker → chat id → token → delete marker), shared by `setup` and the web wizard. |
 | `health` | The registry of operational problems (`open`, `resolve`, `forget`, one-shot `notice`); `tick` sends a serious problem once past its grace and its resolution once, as plain text, retried on the shared backoff per row ([ADR 0012](adr/0012-health-registry-and-liveness.md)); `tick(now, sending=False)` while Telegram is not set up deletes notices and resolved rows unsent, and `rearm` at a save gets each open, unannounced serious problem announced once (a running grace is kept; one with failed attempts starts over). |
 | `liveness` | `status.json`: the atomic 0600 write, `write_failure_status` (no watcher needed), `restart_message`; `wait_until_ready` (`install`, `upgrade`); the silent daily `Heartbeat`. |
+| `selfupdate` | `Install.current` at start (installed version; Homebrew's resolved `opt/diffbell`); `SelfUpdate.check` from maintenance, at most every 60 s, against that start snapshot: a newer install under launchd stops the daemon normally and `KeepAlive` starts the new one (outside launchd it only warns); `queue_update_notice` at start, the silent "updated: Y → X" notice ([ADR 0022](adr/0022-self-restart-after-an-upgrade.md)). |
 | `lock` | Singleton `flock` on `daemon.lock`; `holder_pid()` for `status`. |
 | `paths` | Config, state and log locations, with `DIFFBELL_*` environment overrides; `own_paths` (diffbell's own dirs and files), `tighten_install` (narrows them) and `loose_modes` (reports them, read-only, for `doctor`). |
 | `models` | `Change`, `ChangeKind`, net-effect `collapse()`. |

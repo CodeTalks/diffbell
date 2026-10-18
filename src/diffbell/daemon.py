@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from diffbell import liveness
+from diffbell import __version__, liveness, selfupdate
 from diffbell.config import (
     Config,
     ConfigError,
@@ -78,7 +78,11 @@ class Daemon:
         preview_home: Path | None = None,
         # Why the slot is empty at start (from the Keychain); None when configured.
         setup_missing: Missing | None = None,
+        # Watches for a newer install under the running daemon (ADR 0022); tests inject.
+        self_update: Callable[[str], selfupdate.SelfUpdate] = selfupdate.SelfUpdate.at_start,
     ) -> None:
+        self._self_update_factory = self_update
+        self._self_update: selfupdate.SelfUpdate | None = None
         self._config_path = config_path
         self._store = store
         self._sender = sender
@@ -385,6 +389,15 @@ class Daemon:
         self._started_at = self._clock()
         previous = liveness.read_status(self._state_dir)
         liveness.queue_restart_notice(self._store, self._health, previous, self._started_at)
+        try:
+            selfupdate.queue_update_notice(self._store, self._health, __version__)
+        except Exception:
+            log.exception("recording the running version failed")
+        try:
+            # What is installed now, so a later change means a newer install (ADR 0022).
+            self._self_update = self._self_update_factory(__version__)
+        except Exception:
+            log.exception("reading the install failed: no restart after an upgrade")
         loop = asyncio.get_running_loop()
         inbox: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
@@ -631,6 +644,12 @@ class Daemon:
                 self._write_status(watcher)
             except Exception:
                 log.exception("maintenance: writing status.json failed")
+            try:
+                # A newer install: stop normally, and launchd's KeepAlive starts it.
+                if self._self_update is not None and self._self_update.check(self._clock()):
+                    stop.set()
+            except Exception:
+                log.exception("maintenance: checking for a newer install failed")
             try:
                 # The downgrade guard's liveness floor (content snapshots spec §2.5).
                 self._store.mark_snapshots_seen(self._clock())
