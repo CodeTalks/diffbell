@@ -1,7 +1,7 @@
 """Diffbell: Watchman-powered key-file change notifications
 via Telegram."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 # The product's name in prose (Telegram texts, the web page, help). Commands, the
 # package, the launchd label, the Keychain service and paths are "diffbell".
 BRAND = "Diffbell"
