@@ -193,6 +193,34 @@ def test_update_formula_replaces_url_sha_and_resources_only() -> None:
     assert 'depends_on "python@3.15"' in new
 
 
+BOTTLED = FORMULA.replace(
+    '  license "MIT"\n',
+    '  license "MIT"\n\n'
+    "  bottle do\n"
+    '    root_url "https://github.com/CodeTalks/homebrew-tap/releases/download/diffbell-0.1.1"\n'
+    "    rebuild 1\n"
+    f'    sha256 cellar: :any_skip_relocation, arm64_tahoe: "{"f" * 64}"\n'
+    "  end\n",
+)
+
+
+def test_a_new_version_drops_the_old_bottles() -> None:
+    """They name the old version: pr-pull writes the new block from the PR's builds."""
+    new = bumper.update_formula(BOTTLED, "https://x/diffbell-0.1.2.tar.gz", SHA_NEW, "")
+    assert "bottle do" not in new and "rebuild" not in new
+    assert '  license "MIT"\n\n  depends_on "python@3.15"' in new
+
+
+def test_the_same_version_keeps_its_bottles() -> None:
+    url = "https://github.com/CodeTalks/diffbell/releases/download/v0.1.1/diffbell-0.1.1.tar.gz"
+    resources = (
+        '  resource "click" do\n    url "https://files/click-8.0.tar.gz"\n    sha256 "'
+        + "c" * 64
+        + '"\n  end\n'
+    )
+    assert bumper.update_formula(BOTTLED, url, SHA_OLD, resources) == BOTTLED
+
+
 def test_sdist_sha256_reads_the_release_sums() -> None:
     assert bumper.sdist_sha256(SUMS, "0.1.2") == SHA_NEW
     with pytest.raises(bumper.BumpError, match=re.escape("no line for diffbell-0.1.3.tar.gz")):

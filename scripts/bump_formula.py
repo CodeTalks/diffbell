@@ -39,6 +39,8 @@ SHA_LINE = re.compile(r'^  sha256 "[0-9a-f]{64}"$', re.MULTILINE)
 PYTHON_DEP = re.compile(r'^  depends_on "python@(\d+\.\d+)"$', re.MULTILINE)
 RESOURCES_START = re.compile(r"^  pypi_packages [^\n]*\n\n", re.MULTILINE)
 INSTALL = "  def install\n"
+# The bottle block brew pr-pull writes: it names one version's bottles.
+BOTTLE_BLOCK = re.compile(r"^  bottle do\n(?:    [^\n]*\n)*  end\n\n?", re.MULTILINE)
 
 
 class BumpError(Exception):
@@ -110,7 +112,9 @@ def formula_python(formula: str) -> str:
 
 
 def update_formula(formula: str, url: str, sha256: str, resources: str) -> str:
-    """The formula with its url, sha256 and resource blocks replaced; the rest kept."""
+    """The formula with its url, sha256 and resource blocks replaced; the rest kept.
+    A new url (a new version) drops the bottle block: its bottles are the old
+    version's, and the tap's brew pr-pull writes the new block from the PR's builds."""
     if len(URL_LINE.findall(formula)) != 1 or len(SHA_LINE.findall(formula)) != 1:
         raise BumpError("expected exactly one top-level url and sha256 line in the formula")
     start = RESOURCES_START.search(formula)
@@ -118,6 +122,8 @@ def update_formula(formula: str, url: str, sha256: str, resources: str) -> str:
     if start is None or end < start.end():
         raise BumpError("expected the resources between pypi_packages and def install")
     formula = formula[: start.end()] + resources + "\n" + formula[end:]
+    if f'  url "{url}"' not in formula:
+        formula = BOTTLE_BLOCK.sub("", formula)
     formula = URL_LINE.sub(f'  url "{url}"', formula)
     return SHA_LINE.sub(f'  sha256 "{sha256}"', formula)
 
