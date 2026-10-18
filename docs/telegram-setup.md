@@ -44,6 +44,16 @@ Click Send test message: a sample notification arrives in the chat, so you see w
 
 Then click Save. Diffbell stores the token and the chat id in the Keychain and starts sending at once. Changes recorded while Telegram wasn't set up arrive as one catch-up message per project.
 
+## Using Diffbell on more than one Mac
+
+Several Macs can share one bot and one chat. On each Mac, set up Telegram with the same bot token.
+
+The bot already has your chat, so after clicking Check send /start to the bot again: the page finds the chat as it did the first time. Or enter the chat id by hand.
+
+Each Mac signs its messages with its name: a notification's first line ends with 💻 and the name, and alerts and the daily heartbeat read Diffbell (name). The name is the Mac's Computer Name; set another one, or turn it off, in Settings → Notifications.
+
+Each Mac numbers its own changes, so the Open link at the end of a notification names its Mac too: it opens that Mac's Diffbell page, on that Mac.
+
 ## Privacy
 
 The bot only ever sends to the one chat you picked. It never answers anyone else: strangers can find a bot and message it, but they get no reply and see nothing of yours.

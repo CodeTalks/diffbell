@@ -25,6 +25,7 @@ flowchart LR
         H["health<br/>problems: open once, resolve once"]
         LV["liveness<br/>status.json at stop/start · heartbeat"]
         SU["selfupdate<br/>newer install? · update notice"]
+        MC["machine<br/>this Mac's name · signature"]
         DL["delivery<br/>classify · backoff"]
         S[("store · SQLite WAL (schema v7)<br/>projects · clocks · hashes · changes · events · event_reports · batch_reports<br/>snoozes · problems · kv · web_logins · web_sessions · web_requests")]
         C["config.yaml<br/>source of truth"]
@@ -65,6 +66,9 @@ flowchart LR
     LV -- "restart notice" --> H
     DM -- "maintenance: check (60 s) → stop for launchd" --> SU
     SU -- "update notice (silent)" --> H
+    DM -- "resolve notify.machine (start, every reload)" --> MC
+    MC -. "name: NotifierSettings · signature: Health, Heartbeat, notices" .-> N & H & LV
+    WA -- "Computer Name (placeholder)" --> MC
     KC -. "token, chat id (read once at start)" .-> SL
     SL -. "configured: hold · mute · skip" .-> N & H & LV
     DM -- "pump PDUs" --> W
@@ -103,7 +107,7 @@ flowchart LR
 | `config` | Strict pydantic model, additive built-in lists, pattern validation (`check_pattern`), project resolution (realpath, duplicates), default config text. Errors name projects and entry numbers, never paths ("duplicate project path: entries 1 and 2 (projects a and b)", "project (unnamed): …"), since the web API returns them as 422 bodies. |
 | `store` | SQLite: the two durability transactions, outbox status (`pending`, `sent`, `failed`, `held`, `skipped`), pruning; `event_reports` (schema v3), the redacted report of each event's latest delivery attempt; `snoozes` and `batch_reports` (schema v4, which rebuilt `events`; see *Crash and restart behavior*); `problems` and `kv` (schema v5, the health registry and the heartbeat's last slot); `projects` (schema v6, which rebuilt every per-project table on a stable folder id; see *Project identity*); `events.last_error_kind` and `events.last_error_at` (schema v7, added columns: the `ErrorKind` and time written with every failure's `last_error`, cleared with it), from which `telegram_failure()` derives the Telegram card's failing state (see *Telegram setup*); the old `alerts` table is dropped on every open. `query_events(q=…, redact=…)` also searches stored diff lines (see *Search inside diffs*); three `event_reports` triggers bump `kv.reports_epoch`, the key of that search's memo ([ADR 0013](adr/0013-diff-search-and-readability.md)), with no schema version change. |
 | `debouncer` | Quiet window / max wait per project; refilled from the journal at startup. |
-| `notifier` | Collapse → event → reports → `notify_on` rules (nothing left: `skipped`) → pause (`held`) → render with the deep link → store the report (best effort) → send; retry/backoff; exactly one plain-text fallback. `catch_up_due` sends one catch-up message per project when its held events are due ([ADR 0011](adr/0011-pause-and-rules-in-the-notifier.md)). |
+| `notifier` | Collapse → event → reports → `notify_on` rules (nothing left: `skipped`) → pause (`held`) → render with the deep link → store the report (best effort) → send; retry/backoff; exactly one plain-text fallback. `NotifierSettings.machine` (the daemon's resolved name) goes into every `MessageContext`. `catch_up_due` sends one catch-up message per project when its held events are due ([ADR 0011](adr/0011-pause-and-rules-in-the-notifier.md)). |
 | `pausing` | `pause_until(snooze, quiet, now, configured=…)`: not configured (Telegram not set up) → held forever with reason `setup`, before anything else; otherwise the later end of an active snooze (`HELD_FOREVER` when indefinite) and the local quiet window, and the reason. The quiet end steps real minutes and checks the local wall clock (DST-safe: 23 h and 25 h days, a skipped end time, a fall-back out of the window). Pure. |
 | `diffing` | The fallback's per-file reports: `git diff HEAD` hunks, first lines of an untracked new file, or metadata only, with `first_line` (the first changed line, `first_changed_line`: the hunk header's new-side start plus the context lines above the first `+`/`-` line, a deletion where it sat, at least 1; 1 for an untracked new file; None without a hunk); the one hunk parser (`parse_diff`, splitting on "\n" only: `split_lines`); the hardened reader (`read_capturable`); the git note (`git_notes`, `ObjectFormats`). Never reads a redacted file. |
 | `snapshots` | Content snapshots ([ADR 0017](adr/0017-content-snapshots.md)): `Snapshotter` captures an event's "after", note and branch (`capture`) and a baseline's contents (`read_baseline`), and builds content-based reports with the isolated `git diff --no-index` engine (`report`; `check_isolation`, `sweep`). See *Content snapshots*. |
@@ -112,8 +116,9 @@ flowchart LR
 | `sender_slot` | `SenderSlot`, the `Sender` the daemon, notifier, health and heartbeat hold: a `TelegramClient` or nothing. `configured`; `bot_username` (a background `getMe` after start, never on the start path; at a swap, the draft's); `send` raises `NotSetUp` while empty; `swap(token, chat_id, *, bot_username)` installs the new client on the loop thread with no `await` before `configured` is true; in-flight sends are counted per client, and the old client is closed after its last one ([ADR 0018](adr/0018-unconfigured-start-and-web-bot-setup.md)). |
 | `delivery` | The classification of a failed send and its delay (a 429's `retry_after`, else 30 s → 30 min), shared by the notifier and health; each applies its own policy. |
 | `secrets` | Keychain get/set/delete through `/usr/bin/security` under `service()` (`io.688.diffbell`, or the scratch-only `DIFFBELL_KEYCHAIN_SERVICE`: only `io.688.diffbell` or `io.688.diffbell-<suffix>`); `credentials()` (the pair, or why it is not set up: both absent, one absent, the `save-pending` marker; a read error raises) and `save_credentials` (both values checked, then marker → chat id → token → delete marker), shared by `setup` and the web wizard. |
-| `health` | The registry of operational problems (`open`, `resolve`, `forget`, one-shot `notice`); `tick` sends a serious problem once past its grace and its resolution once, as plain text, retried on the shared backoff per row ([ADR 0012](adr/0012-health-registry-and-liveness.md)); `tick(now, sending=False)` while Telegram is not set up deletes notices and resolved rows unsent, and `rearm` at a save gets each open, unannounced serious problem announced once (a running grace is kept; one with failed attempts starts over). |
-| `liveness` | `status.json`: the atomic 0600 write, `write_failure_status` (no watcher needed), `restart_message`; `wait_until_ready` (`install`, `upgrade`); the silent daily `Heartbeat`. |
+| `health` | The registry of operational problems (`open`, `resolve`, `forget`, one-shot `notice`); `tick` sends a serious problem once past its grace and its resolution once, as plain text, retried on the shared backoff per row ([ADR 0012](adr/0012-health-registry-and-liveness.md)); `tick(now, sending=False)` while Telegram is not set up deletes notices and resolved rows unsent, and `rearm` at a save gets each open, unannounced serious problem announced once (a running grace is kept; one with failed attempts starts over). Alerts sign with `signature()`, read at each send ("⚠️ Diffbell (Work MBP): …", ADR 0023). |
+| `liveness` | `status.json`: the atomic 0600 write, `write_failure_status` (no watcher needed), `restart_message`; `wait_until_ready` (`install`, `upgrade`); the silent daily `Heartbeat`. The restart notice and the heartbeat carry the daemon's signature ("✅ Diffbell (Work MBP) · watching …", ADR 0023). |
+| `machine` | This Mac's name in messages ([ADR 0023](adr/0023-name-the-mac-in-messages.md)): `computer_name` (`scutil --get ComputerName`, else the host name without `.local`; never raises), `clean` (no control/format/bidi characters, whitespace collapsed, at most 40), `resolve(notify.machine)` (absent: the Computer Name; `""`: none; else the text) and `signature` ("Diffbell (Work MBP)"). The daemon resolves it at start and at every reload; tests never run `scutil` (a conftest belt). |
 | `selfupdate` | `Install.current` at start (installed version; Homebrew's resolved `opt/diffbell`); `SelfUpdate.check` from maintenance, at most every 60 s, against that start snapshot: a newer install under launchd stops the daemon normally and `KeepAlive` starts the new one (outside launchd it only warns); `queue_update_notice` at start, the silent "updated: Y → X" notice ([ADR 0022](adr/0022-self-restart-after-an-upgrade.md)). |
 | `lock` | Singleton `flock` on `daemon.lock`; `holder_pid()` for `status`. |
 | `paths` | Config, state and log locations, with `DIFFBELL_*` environment overrides; `own_paths` (diffbell's own dirs and files), `tighten_install` (narrows them) and `loose_modes` (reports them, read-only, for `doctor`). |
@@ -316,6 +321,12 @@ migrations/x.sql                                       in ONE <code> per file
   held 14:05–15:40 (snoozed)` (the branch frozen with its last event; a `setup`
   hold reads `held until Telegram was set up (14:05–15:40)`), then
   `3 changes in 2 files · +a −r`, and links `Open #ID (+K more)`.
+- This Mac's name ([ADR 0023](adr/0023-name-the-mac-in-messages.md),
+  `MessageContext.machine`): the first line, normal or catch-up, ends with
+  ` · 💻 Work MBP` (escaped, not bold), and the link reads `Open #42 on Work MBP`
+  (`Open #42 (+3 more) on Work MBP`): event ids and the 127.0.0.1 link are per
+  Mac. Without a name (`notify.machine: ""`, or none found) both read as above;
+  the sample message never has one.
 - Shrinking to 4096 UTF-16 units, in order: halve the per-file line budget down to 0
   (at 0 each file's quote entry says "… (N lines hidden)"), drop the quote
   (`Composed.lines` = 0), collapse the trailing files ("…and K more files"), clip
@@ -1107,8 +1118,10 @@ sequenceDiagram
 - `POST /api/settings/check` takes the PUT body without `config_version`, writes
   nothing, and answers `{"errors": {field: message}, "issues": {list: [{line,
   reason}]}}` (empty: valid). Fields: `quiet_seconds`, `max_wait_seconds`,
-  `max_lines`, `quiet_from`, `quiet_to`, `heartbeat`; lists: `defaults`, `ignore`,
-  `redact`. `PUT /api/settings` runs the check before comparing `config_version`;
+  `max_lines`, `quiet_from`, `quiet_to`, `heartbeat`, `machine`; lists: `defaults`,
+  `ignore`, `redact`. `notify.machine` (ADR 0023) is sent as `""` (switch off),
+  `null` (on with an empty field: the Computer Name, `GET /api/settings`'s
+  `notify.machine_default`, the field's placeholder) or the text; absent, it is kept. `PUT /api/settings` runs the check before comparing `config_version`;
   its 422 keeps `error` (a one-line summary of at most five problems, then
   "…and N more") and adds `errors` and `issues`.
 - One message table (`settings_check.MESSAGES`): the check, the PUT and
