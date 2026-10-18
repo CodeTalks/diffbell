@@ -34,6 +34,7 @@ from diffbell import (
     doctor,
     launchd,
     liveness,
+    machine,
     paths,
     rename_install,
     upgrade,
@@ -314,8 +315,10 @@ def status_report(
     counts: dict[str, int] | None,
     failures: list[EventRow],
     telegram_restart: bool = False,
+    machine_name: str | None = None,
 ) -> str:
     out = [f"daemon:   {f'running (pid {daemon_pid})' if daemon_pid else 'not running'}"]
+    out.append(f"machine:  {machine_name or '(not named)'}")
     out.append(f"watchman: {watchman_version or 'unreachable'}")
     out.append(f"telegram: {telegram}")
     if telegram_restart:
@@ -524,6 +527,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             counts=None if unmigrated else counts,
             failures=failures,
             telegram_restart=restart,
+            machine_name=machine.resolve(config.notify.machine if config is not None else None),
         )
     )
     if unmigrated:

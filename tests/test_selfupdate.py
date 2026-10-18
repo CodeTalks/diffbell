@@ -153,3 +153,17 @@ def test_the_notice_names_both_versions_once(tmp_dir: Path) -> None:
 def test_a_downgrade_is_not_called_an_update() -> None:
     assert selfupdate.update_text("0.1.3", "0.1.2") == "Diffbell changed version: 0.1.3 → 0.1.2"
     assert selfupdate.update_text("0.1.9", "0.1.10") == "⬆️ Diffbell updated: 0.1.9 → 0.1.10"
+
+
+def test_the_update_notice_names_the_mac(tmp_dir: Path) -> None:
+    assert selfupdate.update_text("0.1.2", "0.1.3", brand="Diffbell (Work MBP)") == (
+        "⬆️ Diffbell (Work MBP) updated: 0.1.2 → 0.1.3"
+    )
+    assert selfupdate.update_text("0.1.3", "0.1.2", brand="Diffbell (Work MBP)") == (
+        "Diffbell (Work MBP) changed version: 0.1.3 → 0.1.2"
+    )
+    store = Store(tmp_dir / "state.db")
+    health = Notices()
+    selfupdate.queue_update_notice(store, health, "0.1.2")  # type: ignore[arg-type]
+    selfupdate.queue_update_notice(store, health, "0.1.3", brand="Diffbell (M)")  # type: ignore[arg-type]
+    assert health.queued == [("update", "⬆️ Diffbell (M) updated: 0.1.2 → 0.1.3")]

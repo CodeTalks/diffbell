@@ -147,17 +147,18 @@ def _numbers(version: str) -> tuple[int, ...] | None:
         return None
 
 
-def update_text(previous: str, running: str) -> str:
+def update_text(previous: str, running: str, brand: str = BRAND) -> str:
+    """``brand``: how the notice signs (ADR 0023), "Diffbell (Work MBP)"."""
     before, after = _numbers(previous), _numbers(running)
     if before is not None and after is not None and after > before:
-        return f"⬆️ {BRAND} updated: {previous} → {running}"
-    return f"{BRAND} changed version: {previous} → {running}"
+        return f"⬆️ {brand} updated: {previous} → {running}"
+    return f"{brand} changed version: {previous} → {running}"
 
 
-def queue_update_notice(store: Store, health: Health, running: str) -> None:
+def queue_update_notice(store: Store, health: Health, running: str, brand: str = BRAND) -> None:
     """At start: a notice when the version differs from the one that ran last (none on
     a first start), then record the running one."""
     previous = store.kv_get(RUNNING_VERSION_KEY)
     if previous and previous != running:
-        health.notice(UPDATE_KEY, update_text(previous, running))
+        health.notice(UPDATE_KEY, update_text(previous, running, brand))
     store.kv_set(RUNNING_VERSION_KEY, running)

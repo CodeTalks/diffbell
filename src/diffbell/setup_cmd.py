@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from diffbell import BRAND
-from diffbell.config import write_default_config
+from diffbell import BRAND, machine
+from diffbell.config import ConfigError, load_config, write_default_config
 from diffbell.secrets import SecretStoreError, save_credentials, service
 from diffbell.telegram import TelegramError
 
@@ -86,10 +86,11 @@ async def run_setup(
     else:
         io.say(f"Config already exists, left unchanged: {config_path}")
 
+    signature = machine.signature(configured_machine(config_path))
     client = make_client(token, chat_id)
     try:
         await client.send(
-            f"✅ {BRAND} is set up. Key-file changes will be reported here.", parse_mode=None
+            f"✅ {signature} is set up. Key-file changes will be reported here.", parse_mode=None
         )
     except TelegramError as exc:
         io.say(f"Test message failed: {exc}")
@@ -98,6 +99,16 @@ async def run_setup(
         await client.aclose()
     io.say("Test message sent. Next: add projects to the config, then `diffbell install`.")
     return 0
+
+
+def configured_machine(config_path: Path) -> str | None:
+    """This Mac's name as the config says it (ADR 0023); a config that can't be read
+    is the Computer Name, as for a config without ``notify.machine``."""
+    try:
+        configured = load_config(config_path).notify.machine
+    except ConfigError:
+        configured = None
+    return machine.resolve(configured)
 
 
 async def _detect_chat_id(client: SetupClient, io: SetupIO, username: str) -> str | None:

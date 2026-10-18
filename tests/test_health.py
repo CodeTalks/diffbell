@@ -1233,3 +1233,43 @@ async def test_a_muted_tick_and_rearm_leave_an_unrecorded_row_alone(
     assert store.get_problem("n") is not None
     unchanged = store.get_problem("watchman")
     assert unchanged is not None and unchanged.attempts == 2
+
+
+# -- the Mac's name (ADR 0023) -------------------------------------------------------------
+
+
+async def test_alerts_are_signed_with_the_mac_read_at_send_time(
+    store: Store, sender: FakeSender, clock: Clock
+) -> None:
+    name = ["Work MBP"]
+    health = Health(store, sender, clock=clock, tz=UTC, signature=lambda: f"Diffbell ({name[0]})")
+    health.open("project:p", "serious", "project p: watch lost", project="p")
+    await tick(health, clock)
+    name[0] = "Home Mini"  # a reload renamed the Mac: the ✅ uses the new name
+    clock.now += 20 * 60
+    health.resolve("project:p")
+    await tick(health, clock)
+    health.open("watchman", "serious", "it broke")
+    await tick(health, clock)
+    health.resolve("watchman")
+    await tick(health, clock)
+    assert texts(sender) == [
+        "⚠️ Diffbell (Work MBP): project p: watch lost",
+        "✅ Diffbell (Home Mini): project p: watching again (down 10:00–10:20)",
+        "⚠️ Diffbell (Home Mini): it broke",
+        "✅ Diffbell (Home Mini): Watchman is reachable again (down 10:20–10:20)",
+    ]
+
+
+async def test_an_unannounced_resolution_is_signed_too(
+    store: Store, sender: FakeSender, clock: Clock
+) -> None:
+    health = Health(store, sender, clock=clock, tz=UTC, signature=lambda: "Diffbell (M)")
+    sender.outcomes.append(TelegramError(ErrorKind.RETRYABLE, "down"))
+    health.open("watchman", "serious", "it broke")
+    await tick(health, clock)
+    health.resolve("watchman")
+    await tick(health, clock, 60)
+    assert texts(sender)[-1] == (
+        "✅ Diffbell (M): Watchman is reachable again (was down 10:00–10:00: it broke)"
+    )

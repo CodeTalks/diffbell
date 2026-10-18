@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from diffbell import __version__, liveness, selfupdate
+from diffbell import __version__, liveness, machine, selfupdate
 from diffbell.config import (
     Config,
     ConfigError,
@@ -101,6 +101,9 @@ class Daemon:
         self._missing_recheck = missing_recheck_interval
         self._clock = clock
         self._config = Config()
+        # This Mac's name in messages (ADR 0023): resolved from notify.machine at start
+        # and at every reload (_apply_config); None: no name.
+        self._machine: str | None = None
         self._projects: dict[str, ResolvedProject] = {}
         self._missing: dict[str, MissingProject] = {}
         # Serializes reloads: the config self-watch and the missing-path re-check
@@ -109,7 +112,7 @@ class Daemon:
         self._debouncer = Debouncer(10, 60)
         # Operational problems: opened and resolved here and by the watcher, sent by
         # the maintenance tick (health spec §4).
-        self._health = Health(store, sender, clock=clock)
+        self._health = Health(store, sender, clock=clock, signature=self._signature)
         self._heartbeat = liveness.Heartbeat(
             store,
             sender,
@@ -117,6 +120,7 @@ class Daemon:
             at=lambda: self._config.notify.heartbeat,
             projects=lambda: len(self._projects),
             configured=lambda: self._sender.configured,
+            signature=self._signature,
         )
         # When this run started (status.json's last_started_at), and why it ended
         # (None: a normal stop, written as clean_shutdown).
@@ -165,6 +169,7 @@ class Daemon:
             not self._config_applied or config.notify.quiet_hours != self._config.notify.quiet_hours
         )
         self._config = config
+        self._machine = machine.resolve(config.notify.machine)
         self._projects = {p.name: p for p in projects}
         self._debouncer.configure(config.debounce.quiet_seconds, config.debounce.max_wait_seconds)
         # The start release counts as done only once it succeeded; until then every
@@ -176,6 +181,15 @@ class Daemon:
             self._health.forget_projects_except([project_name(p) for p in config.projects])
         except sqlite3.Error:
             log.exception("dropping the problems of removed projects failed")
+
+    def _signature(self) -> str:
+        """How alerts, notices and the heartbeat sign: "Diffbell (Work MBP)"."""
+        return machine.signature(self._machine)
+
+    @property
+    def machine_name(self) -> str | None:
+        """This Mac's name in messages, as last resolved; None: no name."""
+        return self._machine
 
     def _forget_redacted(self, config: Config) -> None:
         """A redaction list that gained a pattern (or the first apply: it may have
@@ -355,6 +369,7 @@ class Daemon:
             web_enabled=running,
             web_port=self._web.port if running else None,
             quiet=QuietHours.parse(quiet) if quiet is not None else None,
+            machine=self._machine,
         )
 
     def _projects_get(self, name: str) -> ResolvedProject | None:
@@ -388,9 +403,13 @@ class Daemon:
         # The previous status.json, read before this run writes its own (§5.1).
         self._started_at = self._clock()
         previous = liveness.read_status(self._state_dir)
-        liveness.queue_restart_notice(self._store, self._health, previous, self._started_at)
+        liveness.queue_restart_notice(
+            self._store, self._health, previous, self._started_at, brand=self._signature()
+        )
         try:
-            selfupdate.queue_update_notice(self._store, self._health, __version__)
+            selfupdate.queue_update_notice(
+                self._store, self._health, __version__, self._signature()
+            )
         except Exception:
             log.exception("recording the running version failed")
         try:

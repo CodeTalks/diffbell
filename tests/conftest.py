@@ -109,6 +109,15 @@ def a_test_mac(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
+def nameless_mac(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Mac without a Computer Name or host name: messages carry no name, as they
+    read before ADR 0023 (for tests that pin those texts)."""
+    from diffbell import machine
+
+    monkeypatch.setattr(machine, "computer_name", lambda run=None: None)
+
+
+@pytest.fixture
 def tmp_dir(tmp_path: Path) -> Path:
     return Path(os.path.realpath(tmp_path))
 

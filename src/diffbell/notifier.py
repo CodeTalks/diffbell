@@ -40,6 +40,7 @@ class NotifierSettings:
     web_enabled: bool
     web_port: int | None = None  # the deep link's port; None while the web UI is disabled
     quiet: QuietHours | None = None  # the daily quiet hours, None when off
+    machine: str | None = None  # this Mac's name in messages (ADR 0023); None: no name
 
 
 NOTHING_SENT = Composed("", 0, 0)  # what a held or skipped event's report records
@@ -406,6 +407,7 @@ class Notifier:
                 more=len(events) - 1,
                 web_port=settings.web_port,
                 catch_up=held,
+                machine=settings.machine,
             )
             composed = compose(ctx, reports, max_lines=settings.max_lines, html=True)
             batch_id = first.id
@@ -565,6 +567,7 @@ class Notifier:
                 settings.web_enabled,
                 event_id=event_id,
                 web_port=settings.web_port,
+                machine=settings.machine,
             )
             composed = compose(ctx, kept, max_lines=settings.max_lines, html=True)
             # Before the send, so a failed attempt has its diff too (U12).
